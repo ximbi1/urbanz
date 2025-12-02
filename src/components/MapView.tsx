@@ -7,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Locate, Users, User, Globe, X } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Locate, Users, User, Globe, X, SlidersHorizontal } from 'lucide-react';
 
 interface MapViewProps {
   runPath: Coordinate[];
@@ -36,6 +37,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [selectedChallenge, setSelectedChallenge] = useState<MapChallenge | null>(null);
   const [challengeTargets, setChallengeTargets] = useState<Set<string>>(new Set());
   const [targetLoading, setTargetLoading] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [showChallenges, setShowChallenges] = useState(true);
+  const [showPois, setShowPois] = useState(false);
   const { user } = useAuth();
 
   // Cargar token de Mapbox desde edge function
@@ -532,6 +536,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
     challengeMarkersRef.current.forEach(marker => marker.remove());
     challengeMarkersRef.current = [];
+    if (!showChallenges) return;
+    challengeMarkersRef.current.forEach(marker => marker.remove());
+    challengeMarkersRef.current = [];
 
     mapChallenges.forEach(challenge => {
       const el = document.createElement('div');
@@ -567,12 +574,13 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
       challengeMarkersRef.current.push(marker);
     });
-  }, [mapChallenges, mapReady]);
+  }, [mapChallenges, mapReady, showChallenges]);
 
   useEffect(() => {
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
     poiMarkersRef.current.forEach(marker => marker.remove());
     poiMarkersRef.current = [];
+    if (!showPois) return;
     const iconMap: Record<string, string> = {
       park: '🌳',
       beach: '🏖️',
@@ -594,9 +602,10 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       el.innerHTML = iconMap[poi.category] || '⭐';
 
       const popupHtml = `
-        <div style="min-width: 160px;">
+        <div style="min-width: 180px;color:#0f172a;">
           <p style="font-weight:600;margin-bottom:4px;">${poi.name}</p>
-          <p style="font-size:12px;color:#94a3b8;">${poi.category}</p>
+          <p style="font-size:12px;color:#475569;margin-bottom:6px;">Categoría: ${poi.category}</p>
+          <p style="font-size:12px;">Corre alrededor para etiquetar tu territorio como ${poi.category}.</p>
         </div>
       `;
 
@@ -612,7 +621,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
       poiMarkersRef.current.push(marker);
     });
-  }, [mapPois, mapReady]);
+  }, [mapPois, mapReady, showPois]);
 
   const formatDuration = (milliseconds: number) => {
     const totalMinutes = Math.floor(milliseconds / (60 * 1000));
@@ -770,35 +779,57 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="absolute inset-0" />
       
-      {/* Filtros de territorios */}
-      <div className="absolute top-4 left-4 z-10 flex gap-2">
+      {/* Filtros */}
+      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
         <Button
-          onClick={() => setTerritoryFilter('all')}
-          variant={territoryFilter === 'all' ? 'default' : 'secondary'}
+          variant="secondary"
           size="sm"
           className="shadow-lg"
+          onClick={() => setShowFilterPanel((prev) => !prev)}
         >
-          <Globe className="w-4 h-4 mr-2" />
-          Todos
+          <SlidersHorizontal className="w-4 h-4 mr-2" />
+          {showFilterPanel ? 'Ocultar filtros' : 'Filtros'}
         </Button>
-        <Button
-          onClick={() => setTerritoryFilter('mine')}
-          variant={territoryFilter === 'mine' ? 'default' : 'secondary'}
-          size="sm"
-          className="shadow-lg"
-        >
-          <User className="w-4 h-4 mr-2" />
-          Míos
-        </Button>
-        <Button
-          onClick={() => setTerritoryFilter('friends')}
-          variant={territoryFilter === 'friends' ? 'default' : 'secondary'}
-          size="sm"
-          className="shadow-lg"
-        >
-          <Users className="w-4 h-4 mr-2" />
-          Amigos
-        </Button>
+        {showFilterPanel && (
+          <Card className="w-64 p-3 space-y-3 border-glow bg-background/95">
+            <div>
+              <p className="text-xs uppercase text-muted-foreground mb-2">Territorios</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setTerritoryFilter('all')}
+                  variant={territoryFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                >
+                  <Globe className="w-4 h-4 mr-1" /> Todos
+                </Button>
+                <Button
+                  onClick={() => setTerritoryFilter('mine')}
+                  variant={territoryFilter === 'mine' ? 'default' : 'outline'}
+                  size="sm"
+                >
+                  <User className="w-4 h-4 mr-1" /> Míos
+                </Button>
+                <Button
+                  onClick={() => setTerritoryFilter('friends')}
+                  variant={territoryFilter === 'friends' ? 'default' : 'outline'}
+                  size="sm"
+                >
+                  <Users className="w-4 h-4 mr-1" /> Amigos
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Pines de retos</span>
+                <Switch checked={showChallenges} onCheckedChange={setShowChallenges} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Puntos de interés</span>
+                <Switch checked={showPois} onCheckedChange={setShowPois} />
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
       
       {/* Botón de centrar ubicación */}
