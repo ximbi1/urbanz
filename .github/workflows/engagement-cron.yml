@@ -1,0 +1,20 @@
+name: Engagement Pings
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+jobs:
+  call-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger send-engagement-pings
+        env:
+          SUPABASE_FUNCTION_URL: https://mingyhynzeoawsjnnpwj.functions.supabase.co/send-engagement-pings
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -X POST "$SUPABASE_FUNCTION_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
