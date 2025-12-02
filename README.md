@@ -60,6 +60,7 @@ URBANZ fusiona tres elementos:
 - **Pausa incluida**: Detén temporalmente sin perder progreso
 - **Récords personales**: Mejor ritmo, carrera más larga, más territorios
 - **Responsive**: Funciona en móvil, tablet y desktop
+- **Notificaciones push**: Recibe alertas en tiempo real cuando atacan o roban tus territorios
 
 ---
 
@@ -255,6 +256,10 @@ supabase/
 - Historial de conquistas/robos/refuerzos
 - Guarda atacante, defensor, ritmo, área y resultado
 
+**push_subscriptions**
+- Suscripciones Web Push por usuario
+- Endpoint + claves (p256dh/auth) para enviar notificaciones del sistema
+
 ---
 
 ## 🚀 Instalación y Uso
@@ -264,6 +269,7 @@ supabase/
 - Cuenta de Supabase
 - API key de Mapbox
   - Si necesitas desplegar desde la CLI oficial y no tienes Node 20+, descarga el binario desde GitHub o usa Docker (`docker run supabase/cli ...`).
+- Par de claves VAPID para Web Push (configura los secretos `PUSH_VAPID_PUBLIC_KEY`, `PUSH_VAPID_PRIVATE_KEY` y `PUSH_CONTACT_EMAIL`).
 
 ### Configuración
 
@@ -288,12 +294,19 @@ Crear archivo `.env`:
 
 # Mapbox
 MAPBOX_TOKEN=tu_mapbox_public_token
+
+# Web Push
+VITE_VAPID_PUBLIC_KEY=tu_clave_publica_vapid_base64
 ```
 
 4. **Configurar Supabase Edge Function Secret**
 
 En Supabase Dashboard → Settings → Edge Functions:
 - Añadir secret: `MAPBOX_TOKEN` con tu token público de Mapbox
+- Añadir secrets para Web Push:
+  - `PUSH_VAPID_PUBLIC_KEY`
+  - `PUSH_VAPID_PRIVATE_KEY`
+  - `PUSH_CONTACT_EMAIL` (correo de contacto para VAPID)
 
 5. **Iniciar desarrollo**
 ```bash

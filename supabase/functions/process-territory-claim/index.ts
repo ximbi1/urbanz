@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { polygon, area as turfArea, intersect } from 'npm:@turf/turf@6.5.0'
+import webpush from 'npm:web-push@3.6.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,12 +36,19 @@ const LEVEL_THRESHOLDS = [
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const VAPID_PUBLIC_KEY = Deno.env.get('PUSH_VAPID_PUBLIC_KEY')
+const VAPID_PRIVATE_KEY = Deno.env.get('PUSH_VAPID_PRIVATE_KEY')
+const PUSH_CONTACT = Deno.env.get('PUSH_CONTACT_EMAIL') || 'mailto:support@urbanz.app'
 
 if (!supabaseUrl || !serviceRoleKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(PUSH_CONTACT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+}
+const canSendPush = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY)
 
 interface Coordinate {
   lat: number
@@ -198,6 +206,44 @@ const decrementDefenderProfile = async (profileId: string, pointsToRemove: numbe
     .eq('id', profileId)
 }
 
+const sendPushNotification = async (
+  userId: string | null,
+  notification: { title: string; body: string; data?: Record<string, unknown>; tag?: string }
+) => {
+  if (!canSendPush || !userId) return
+  const { data: subscriptions } = await supabaseAdmin
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .eq('user_id', userId)
+
+  if (!subscriptions?.length) return
+
+  await Promise.all(subscriptions.map(async (sub) => {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: sub.p256dh,
+            auth: sub.auth,
+          },
+        },
+        JSON.stringify(notification)
+      )
+    } catch (error) {
+      const statusCode = (error as any)?.statusCode
+      if (statusCode === 404 || statusCode === 410) {
+        await supabaseAdmin
+          .from('push_subscriptions')
+          .delete()
+          .eq('id', sub.id)
+      } else {
+        console.error('Error enviando notificación push', error)
+      }
+    }
+  }))
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -253,7 +299,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, total_points, total_territories, total_distance, season_points, historical_points')
+      .select('id, username, total_points, total_territories, total_distance, season_points, historical_points')
       .eq('id', user.id)
       .single()
 
@@ -262,6 +308,7 @@ Deno.serve(async (req) => {
     }
 
     const userLevel = calculateLevel(profile.total_points)
+    const attackerName = profile.username || 'Un corredor'
     const maxArea = getMaxAreaForLevel(userLevel)
 
     if (area > maxArea) {
@@ -291,7 +338,7 @@ Deno.serve(async (req) => {
         required_pace,
         status,
         points,
-        owner:profiles!territories_user_id_fkey(id, total_points)
+        owner:profiles!territories_user_id_fkey(id, username, total_points)
       `)
 
     if (territoriesError) {
@@ -337,6 +384,15 @@ Deno.serve(async (req) => {
     if (isStealAttempt && targetTerritory) {
       const ownerLevel = calculateLevel(targetTerritory.owner?.total_points || 0)
       const requiredPace = calculateRequiredPace(targetTerritory.avg_pace, ownerLevel)
+      const territoryUrl = `/territories/${targetTerritory.id}`
+      const notifyDefender = async (body: string) => {
+        await sendPushNotification(targetTerritory.user_id, {
+          title: 'Actividad en tus territorios',
+          body,
+          data: { url: territoryUrl },
+          tag: targetTerritory.id,
+        })
+      }
 
       if (avgPace > requiredPace) {
         await supabaseAdmin
@@ -350,7 +406,8 @@ Deno.serve(async (req) => {
             overlap_ratio: highestOverlap,
             pace: avgPace,
             area,
-          })
+        })
+        await notifyDefender(`${attackerName} intentó robarte un territorio, pero no alcanzó el ritmo necesario.`)
         return new Response(
           JSON.stringify({ error: `Necesitas un ritmo de ${requiredPace.toFixed(2)} min/km o menos para robar este territorio` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -369,7 +426,8 @@ Deno.serve(async (req) => {
             overlap_ratio: highestOverlap,
             pace: avgPace,
             area,
-          })
+        })
+        await notifyDefender(`${attackerName} atacó tu territorio, pero sigues protegido.`)
         return new Response(
           JSON.stringify({ error: 'El territorio está protegido temporalmente' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -406,7 +464,8 @@ Deno.serve(async (req) => {
             overlap_ratio: highestOverlap,
             pace: avgPace,
             area,
-          })
+        })
+        await notifyDefender(`${attackerName} debe esperar antes de volver a atacar tu territorio.`)
         return new Response(
           JSON.stringify({ error: 'Debes esperar antes de volver a atacar este territorio', cooldown: remaining }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -458,6 +517,7 @@ Deno.serve(async (req) => {
 
       if (targetTerritory.user_id) {
         await decrementDefenderProfile(targetTerritory.user_id, targetTerritory.conquest_points)
+        await notifyDefender(`${attackerName} conquistó uno de tus territorios.`)
       }
     } else if (isOwnTerritory && targetTerritory) {
       const newRequiredPace = calculateRequiredPace(avgPace, userLevel)
