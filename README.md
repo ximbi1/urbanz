@@ -30,6 +30,8 @@ URBANZ fusiona tres elementos:
 - **Cooldown anti-spam**: 6h antes de poder reconquistar el mismo territorio
 - **Bonus de defensa**: Los territorios son más difíciles de robar según tu nivel
 - **Metadatos persistentes**: Cada territorio guarda `protected_until`, `cooldown_until`, ritmo requerido y el historial de eventos para reconstruir disputas
+- **Territorios temáticos**: Detectamos parques y zonas emblemáticas para etiquetar la conquista.
+- **Retos en el mapa**: Pines especiales aparecen en MapView; rodea la zona para reclamar puntos extra.
 
 ### 🎮 Progresión y Gamificación
 - **Sistema de niveles**: Gana XP por distancia, territorios y actividad
@@ -201,6 +203,7 @@ supabase/
 ├── functions/          # Edge Functions
 │   └── get-mapbox-token/ # Proxy seguro para Mapbox token
 │   └── process-territory-claim/ # Valida y procesa conquistas/robos
+│   └── send-engagement-pings/ # Recordatorios automáticos
 └── migrations/         # Migraciones de DB
 ```
 
@@ -260,6 +263,14 @@ supabase/
 **push_subscriptions**
 - Suscripciones Web Push por usuario
 - Endpoint + claves (p256dh/auth) para enviar notificaciones del sistema
+
+**map_challenges**
+- Retos geolocalizados que aparecen como pines
+- Cada uno tiene nombre, radio, fechas y recompensa
+
+**map_challenge_claims**
+- Registro de qué usuario completó cada reto del mapa
+- Controla que sólo se reclame una vez por jugador
 
 ---
 

@@ -156,6 +156,12 @@ export const ImportRun = ({ onImportComplete }: ImportRunProps) => {
       const territoriesStolen = resultData?.territoriesStolen ?? 0;
       const pointsGained = resultData?.pointsGained ?? 0;
 
+      if (resultData?.challengeRewards?.length) {
+        toast.success('🏅 Desafío del mapa completado', {
+          description: resultData.challengeRewards.join(', '),
+        });
+      }
+
       if (resultData?.action === 'stolen') {
         toast.success('🔥 ¡Territorio robado desde importación!', {
           description: 'Has conquistado un territorio enemigo con tu archivo GPS',

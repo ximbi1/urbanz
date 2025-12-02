@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { polygon, area as turfArea, intersect } from 'npm:@turf/turf@6.5.0'
+import { polygon, area as turfArea, intersect, booleanPointInPolygon, point } from 'npm:@turf/turf@6.5.0'
 import webpush from 'npm:web-push@3.6.1'
+import parks from '../_shared/data/parks.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -206,6 +207,88 @@ const decrementDefenderProfile = async (profileId: string, pointsToRemove: numbe
     .eq('id', profileId)
 }
 
+const deriveParkTags = (runPolygon: any) => {
+  const tags: { type: string; name: string }[] = []
+  parks.forEach((park) => {
+    const turfPolygon = polygon([
+      park.coordinates.map(coord => [coord.lng, coord.lat])
+    ])
+    if (intersect(runPolygon, turfPolygon)) {
+      tags.push({ type: 'park', name: park.name })
+    }
+  })
+  return tags
+}
+
+const fetchActiveMapChallenges = async () => {
+  const now = new Date().toISOString()
+  const { data } = await supabaseAdmin
+    .from('map_challenges')
+    .select('*')
+    .eq('active', true)
+    .lte('start_date', now)
+    .gte('end_date', now)
+  return data || []
+}
+
+const awardMapChallenges = async (
+  userId: string,
+  runPolygon: any,
+  profileState: any,
+  notify: (body: string) => Promise<void>
+) => {
+  const challenges = await fetchActiveMapChallenges()
+  const completed: any[] = []
+
+  for (const challenge of challenges) {
+    const challengePoint = point([challenge.longitude, challenge.latitude])
+    if (!booleanPointInPolygon(challengePoint, runPolygon)) continue
+
+    const { data: existing } = await supabaseAdmin
+      .from('map_challenge_claims')
+      .select('id')
+      .eq('challenge_id', challenge.id)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (existing) continue
+
+    await supabaseAdmin
+      .from('map_challenge_claims')
+      .insert({ challenge_id: challenge.id, user_id: userId })
+
+    profileState.total_points = (profileState.total_points || 0) + challenge.reward_points
+    profileState.season_points = (profileState.season_points || 0) + challenge.reward_points
+    profileState.historical_points = (profileState.historical_points || 0) + challenge.reward_points
+
+    await supabaseAdmin
+      .from('profiles')
+      .update({
+        total_points: profileState.total_points,
+        season_points: profileState.season_points,
+        historical_points: profileState.historical_points,
+      })
+      .eq('id', userId)
+
+    await notify(`Has completado ${challenge.name}. +${challenge.reward_points} puntos`)
+    completed.push(challenge)
+  }
+
+  return completed
+}
+
+const updateTerritoryThemeTags = async (territoryId: string, runPolygon: any) => {
+  const tags = deriveParkTags(runPolygon)
+  await supabaseAdmin
+    .from('territories')
+    .update({
+      tags,
+      poi_summary: tags.length ? tags.map(tag => tag.name).join(', ') : null,
+    })
+    .eq('id', territoryId)
+  return tags
+}
+
 const sendPushNotification = async (
   userId: string | null,
   notification: { title: string; body: string; data?: Record<string, unknown>; tag?: string }
@@ -309,6 +392,7 @@ Deno.serve(async (req) => {
 
     const userLevel = calculateLevel(profile.total_points)
     const attackerName = profile.username || 'Un corredor'
+    const profileState: any = { ...profile }
     const maxArea = getMaxAreaForLevel(userLevel)
 
     if (area > maxArea) {
@@ -377,6 +461,8 @@ Deno.serve(async (req) => {
     let territoryId: string | null = null
     let runId: string | null = null
     let action: 'conquered' | 'stolen' | 'reinforced' = 'conquered'
+    let poiTags: { type: string; name: string }[] = []
+    let challengeRewards: string[] = []
 
     const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt))
     pointsGained = rewardPoints
@@ -504,14 +590,20 @@ Deno.serve(async (req) => {
       territoriesStolen = 1
       action = 'stolen'
 
+      profileState.total_points = (profileState.total_points || 0) + rewardPoints
+      profileState.season_points = (profileState.season_points || 0) + rewardPoints
+      profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
+      profileState.total_territories = (profileState.total_territories || 0) + 1
+      profileState.total_distance = (profileState.total_distance || 0) + distance
+
       await supabaseAdmin
         .from('profiles')
         .update({
-          total_points: (profile.total_points || 0) + rewardPoints,
-          season_points: (profile.season_points || 0) + rewardPoints,
-          historical_points: (profile.historical_points || 0) + rewardPoints,
-          total_territories: (profile.total_territories || 0) + 1,
-          total_distance: (profile.total_distance || 0) + distance,
+          total_points: profileState.total_points,
+          season_points: profileState.season_points,
+          historical_points: profileState.historical_points,
+          total_territories: profileState.total_territories,
+          total_distance: profileState.total_distance,
         })
         .eq('id', user.id)
 
@@ -542,10 +634,11 @@ Deno.serve(async (req) => {
       action = 'reinforced'
       pointsGained = 0
 
+      profileState.total_distance = (profileState.total_distance || 0) + distance
       await supabaseAdmin
         .from('profiles')
         .update({
-          total_distance: (profile.total_distance || 0) + distance,
+          total_distance: profileState.total_distance,
         })
         .eq('id', user.id)
     } else if (isNewTerritory) {
@@ -575,16 +668,42 @@ Deno.serve(async (req) => {
       territoriesConquered = 1
       action = 'conquered'
 
+      profileState.total_points = (profileState.total_points || 0) + rewardPoints
+      profileState.season_points = (profileState.season_points || 0) + rewardPoints
+      profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
+      profileState.total_territories = (profileState.total_territories || 0) + 1
+      profileState.total_distance = (profileState.total_distance || 0) + distance
+
       await supabaseAdmin
         .from('profiles')
         .update({
-          total_points: (profile.total_points || 0) + rewardPoints,
-          season_points: (profile.season_points || 0) + rewardPoints,
-          historical_points: (profile.historical_points || 0) + rewardPoints,
-          total_territories: (profile.total_territories || 0) + 1,
-          total_distance: (profile.total_distance || 0) + distance,
+          total_points: profileState.total_points,
+          season_points: profileState.season_points,
+          historical_points: profileState.historical_points,
+          total_territories: profileState.total_territories,
+          total_distance: profileState.total_distance,
         })
         .eq('id', user.id)
+    }
+
+    if (territoryId) {
+      poiTags = await updateTerritoryThemeTags(territoryId, runPolygon)
+      const completedChallenges = await awardMapChallenges(
+        user.id,
+        runPolygon,
+        profileState,
+        async (body: string) => {
+          await sendPushNotification(user.id, {
+            title: 'Desafío del mapa',
+            body,
+            data: { url: '/challenges' },
+            tag: 'map-challenge'
+          })
+        }
+      )
+      challengeRewards = completedChallenges.map(ch => ch.name)
+      const challengeBonus = completedChallenges.reduce((sum, ch) => sum + ch.reward_points, 0)
+      pointsGained += challengeBonus
     }
 
     const { data: run } = await supabaseAdmin
@@ -634,6 +753,8 @@ Deno.serve(async (req) => {
           territoriesLost,
           protectedUntil,
           cooldownDuration: STEAL_COOLDOWN_MS,
+          poiTags,
+          challengeRewards,
         },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

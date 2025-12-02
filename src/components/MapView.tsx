@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Coordinate, Territory } from '@/types/territory';
+import { Coordinate, Territory, MapChallenge } from '@/types/territory';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -27,6 +27,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const userAccuracyRef = useRef<any>(null);
   const [territoryFilter, setTerritoryFilter] = useState<'all' | 'mine' | 'friends'>('all');
+  const [mapChallenges, setMapChallenges] = useState<MapChallenge[]>([]);
+  const challengeMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const [mapReady, setMapReady] = useState(false);
   const { user } = useAuth();
 
   // Cargar token de Mapbox desde edge function
@@ -67,9 +70,16 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       }
     });
 
+    map.current.on('load', () => {
+      setMapReady(true);
+    });
+
     return () => {
+      setMapReady(false);
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current = [];
+      challengeMarkersRef.current.forEach(marker => marker.remove());
+      challengeMarkersRef.current = [];
       if (userMarkerRef.current) userMarkerRef.current.remove();
       if (userAccuracyRef.current && map.current?.getSource('user-accuracy')) {
         if (map.current.getLayer('user-accuracy')) {
@@ -316,6 +326,20 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     };
   }, []);
 
+  useEffect(() => {
+    const loadChallenges = async () => {
+      const { data, error } = await supabase
+        .from('map_challenges')
+        .select('*')
+        .eq('active', true)
+        .order('start_date', { ascending: true });
+      if (!error && data) {
+        setMapChallenges(data as MapChallenge[]);
+      }
+    };
+    loadChallenges();
+  }, []);
+
   // Dibujar territorios en el mapa
   useEffect(() => {
     if (!map.current || !map.current.isStyleLoaded()) return;
@@ -374,6 +398,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
             cooldownLabel: cooldownRemaining
               ? `Cooldown ${formatDuration(cooldownRemaining)}`
               : null,
+            poiSummary: territory.poiSummary || null,
           },
           geometry: {
             type: 'Polygon' as const,
@@ -433,8 +458,11 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
             : '';
         const timingInfo = [props.protectedLabel, props.cooldownLabel]
           .filter(Boolean)
-          .map((label: string) => `<div style="color:#94a3b8;">${label}</div>`) // muted text
+          .map((label: string) => `<div style=\"color:#94a3b8;\">${label}</div>`) // muted text
           .join('');
+        const poiInfo = props.poiSummary
+          ? `<div style=\"color:#f97316;font-size:12px;\">${props.poiSummary}</div>`
+          : '';
         new mapboxgl.Popup()
           .setLngLat(e.lngLat)
           .setHTML(`
@@ -446,8 +474,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
               <div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px;">
                 <div><span style="color: hsl(var(--muted-foreground));">Área:</span> <strong>${props.area} m²</strong></div>
                 <div><span style="color: hsl(var(--muted-foreground));">Ritmo:</span> <strong>${props.avgPace} min/km</strong></div>
-                <div><span style="color: hsl(var(--muted-foreground));">Conquistado:</span> <strong>${props.timestamp}</strong></div>
+                <div><span style=\"color: hsl(var(--muted-foreground));\">Conquistado:</span> <strong>${props.timestamp}</strong></div>
                 ${timingInfo}
+                ${poiInfo}
               </div>
             </div>
           `)
@@ -457,6 +486,42 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       map.current.on('click', 'territories-fill', popupHandler);
     }
   }, [territories, friendIds, user, territoryFilter]);
+
+  useEffect(() => {
+    if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
+    challengeMarkersRef.current.forEach(marker => marker.remove());
+    challengeMarkersRef.current = [];
+
+    mapChallenges.forEach(challenge => {
+      const el = document.createElement('div');
+      el.style.width = '32px';
+      el.style.height = '32px';
+      el.style.borderRadius = '999px';
+      el.style.background = 'linear-gradient(135deg, #f97316, #facc15)';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      el.style.color = '#fff';
+      el.style.fontWeight = '700';
+      el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)';
+      el.innerHTML = '⚑';
+
+      const popupHtml = `
+        <div style="min-width: 180px;">
+          <p style="font-weight: 600; margin-bottom: 4px;">${challenge.name}</p>
+          <p style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">${challenge.description || ''}</p>
+          <p style="font-size: 12px; color: #f97316;">+${challenge.reward_points} pts</p>
+        </div>
+      `;
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([challenge.longitude, challenge.latitude])
+        .setPopup(new mapboxgl.Popup().setHTML(popupHtml))
+        .addTo(map.current!);
+
+      challengeMarkersRef.current.push(marker);
+    });
+  }, [mapChallenges, mapReady]);
 
   const formatDuration = (milliseconds: number) => {
     const totalMinutes = Math.floor(milliseconds / (60 * 1000));

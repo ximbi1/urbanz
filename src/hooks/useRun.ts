@@ -237,6 +237,12 @@ export const useRun = () => {
         pointsGained = resultData?.pointsGained ?? 0;
         runIdentifier = resultData?.runId ?? null;
 
+        if (resultData?.challengeRewards?.length) {
+          toast.success('🏅 Desafío del mapa completado', {
+            description: resultData.challengeRewards.join(', '),
+          });
+        }
+
         if (resultData?.action === 'stolen') {
           toast.success('🔥 ¡Territorio robado!', {
             description: 'Has conquistado un territorio enemigo',

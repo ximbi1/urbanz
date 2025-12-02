@@ -22,6 +22,8 @@ export interface Territory {
   lastAttackerId?: string | null;
   lastAttackAt?: string | null;
   conquestPoints?: number;
+  tags?: Array<{ type: string; name: string }>;
+  poiSummary?: string | null;
 }
 
 export interface Run {
@@ -46,4 +48,17 @@ export interface UserProfile {
   totalTerritories: number;
   totalDistance: number;
   runs: Run[];
+}
+
+export interface MapChallenge {
+  id: string;
+  name: string;
+  description?: string | null;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  reward_points: number;
+  active: boolean;
+  start_date?: string;
+  end_date?: string;
 }
