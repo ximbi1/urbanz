@@ -327,6 +327,8 @@ npm run dev
 
 La app estará en `http://localhost:8080`
 
+> PWA listo: el repo incluye `manifest.json` e iconos, así que puedes instalar URBANZ desde el navegador (Chrome → “Añadir a pantalla de inicio”). Esto garantiza que las push notifications sigan funcionando cuando se use como app.
+
 ### Despliegue
 
 ```bash

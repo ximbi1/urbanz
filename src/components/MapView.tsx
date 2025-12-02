@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Coordinate, Territory, MapChallenge } from '@/types/territory';
+import { Coordinate, Territory, MapChallenge, MapPoi } from '@/types/territory';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Locate, Users, User, Globe } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Locate, Users, User, Globe, X } from 'lucide-react';
 
 interface MapViewProps {
   runPath: Coordinate[];
@@ -29,7 +30,12 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [territoryFilter, setTerritoryFilter] = useState<'all' | 'mine' | 'friends'>('all');
   const [mapChallenges, setMapChallenges] = useState<MapChallenge[]>([]);
   const challengeMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const [mapPois, setMapPois] = useState<MapPoi[]>([]);
+  const poiMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
+  const [selectedChallenge, setSelectedChallenge] = useState<MapChallenge | null>(null);
+  const [challengeTargets, setChallengeTargets] = useState<Set<string>>(new Set());
+  const [targetLoading, setTargetLoading] = useState(false);
   const { user } = useAuth();
 
   // Cargar token de Mapbox desde edge function
@@ -80,6 +86,8 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       markersRef.current = [];
       challengeMarkersRef.current.forEach(marker => marker.remove());
       challengeMarkersRef.current = [];
+      poiMarkersRef.current.forEach(marker => marker.remove());
+      poiMarkersRef.current = [];
       if (userMarkerRef.current) userMarkerRef.current.remove();
       if (userAccuracyRef.current && map.current?.getSource('user-accuracy')) {
         if (map.current.getLayer('user-accuracy')) {
@@ -340,6 +348,39 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     loadChallenges();
   }, []);
 
+  useEffect(() => {
+    const loadPois = async () => {
+      const { data, error } = await supabase
+        .from('map_pois')
+        .select('*');
+      if (!error && data) {
+        const mapped = (data as any[]).map((poi) => ({
+          ...poi,
+          coordinates: (poi.coordinates || []) as Coordinate[],
+        }));
+        setMapPois(mapped);
+      }
+    };
+    loadPois();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setChallengeTargets(new Set());
+      return;
+    }
+    const fetchTargets = async () => {
+      const { data, error } = await supabase
+        .from('map_challenge_targets')
+        .select('challenge_id')
+        .eq('user_id', user.id);
+      if (!error && data) {
+        setChallengeTargets(new Set(data.map((row: any) => row.challenge_id)));
+      }
+    };
+    fetchTargets();
+  }, [user]);
+
   // Dibujar territorios en el mapa
   useEffect(() => {
     if (!map.current || !map.current.isStyleLoaded()) return;
@@ -514,6 +555,11 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         </div>
       `;
 
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setSelectedChallenge(challenge);
+      });
+
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([challenge.longitude, challenge.latitude])
         .setPopup(new mapboxgl.Popup().setHTML(popupHtml))
@@ -523,6 +569,51 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     });
   }, [mapChallenges, mapReady]);
 
+  useEffect(() => {
+    if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
+    poiMarkersRef.current.forEach(marker => marker.remove());
+    poiMarkersRef.current = [];
+    const iconMap: Record<string, string> = {
+      park: '🌳',
+      beach: '🏖️',
+      historic: '🏛️',
+      plaza: '⛲',
+    };
+    mapPois.forEach(poi => {
+      const el = document.createElement('div');
+      el.style.width = '28px';
+      el.style.height = '28px';
+      el.style.borderRadius = '999px';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      el.style.background = 'rgba(15,15,25,0.8)';
+      el.style.color = '#fff';
+      el.style.fontSize = '16px';
+      el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.3)';
+      el.innerHTML = iconMap[poi.category] || '⭐';
+
+      const popupHtml = `
+        <div style="min-width: 160px;">
+          <p style="font-weight:600;margin-bottom:4px;">${poi.name}</p>
+          <p style="font-size:12px;color:#94a3b8;">${poi.category}</p>
+        </div>
+      `;
+
+      const centroid = poi.coordinates.reduce((acc, coord) => ({
+        lat: acc.lat + coord.lat / poi.coordinates.length,
+        lng: acc.lng + coord.lng / poi.coordinates.length,
+      }), { lat: 0, lng: 0 });
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([centroid.lng, centroid.lat])
+        .setPopup(new mapboxgl.Popup().setHTML(popupHtml))
+        .addTo(map.current!);
+
+      poiMarkersRef.current.push(marker);
+    });
+  }, [mapPois, mapReady]);
+
   const formatDuration = (milliseconds: number) => {
     const totalMinutes = Math.floor(milliseconds / (60 * 1000));
     const hours = Math.floor(totalMinutes / 60);
@@ -531,6 +622,42 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       return `${hours}h ${minutes}m restantes`;
     }
     return `${minutes}m restantes`;
+  };
+
+  const toggleChallengeTarget = async (challenge: MapChallenge) => {
+    if (!user) {
+      toast.error('Inicia sesión para guardar objetivos');
+      return;
+    }
+    setTargetLoading(true);
+    try {
+      if (challengeTargets.has(challenge.id)) {
+        const { error } = await supabase
+          .from('map_challenge_targets')
+          .delete()
+          .eq('challenge_id', challenge.id)
+          .eq('user_id', user.id);
+        if (error) throw error;
+        const updated = new Set(challengeTargets);
+        updated.delete(challenge.id);
+        setChallengeTargets(updated);
+        toast.info('Objetivo eliminado');
+      } else {
+        const { error } = await supabase
+          .from('map_challenge_targets')
+          .insert({ challenge_id: challenge.id, user_id: user.id });
+        if (error) throw error;
+        const updated = new Set(challengeTargets);
+        updated.add(challenge.id);
+        setChallengeTargets(updated);
+        toast.success('Objetivo guardado');
+      }
+    } catch (error) {
+      console.error('Error actualizando objetivo:', error);
+      toast.error('No se pudo actualizar el objetivo');
+    } finally {
+      setTargetLoading(false);
+    }
   };
 
   // Dibujar ruta actual
@@ -682,6 +809,55 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       >
         <Locate className="w-5 h-5" />
       </Button>
+
+      {selectedChallenge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur">
+          <Card className="w-full max-w-md bg-card border-glow p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Reto del mapa</p>
+                <h3 className="text-xl font-display font-bold">{selectedChallenge.name}</h3>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedChallenge(null)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {selectedChallenge.description || 'Corre alrededor de este pin para reclamar la recompensa.'}
+            </p>
+            <div className="bg-muted/30 rounded-lg p-3 text-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span>Radio</span>
+                <strong>{selectedChallenge.radius} m</strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Recompensa</span>
+                <strong className="text-primary">+{selectedChallenge.reward_points} pts</strong>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Ventana</span>
+                <span>
+                  {selectedChallenge.start_date?.slice(0, 10)} – {selectedChallenge.end_date?.slice(0, 10)}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                disabled={targetLoading}
+                onClick={() => toggleChallengeTarget(selectedChallenge)}
+              >
+                {challengeTargets.has(selectedChallenge.id)
+                  ? 'Quitar de objetivos'
+                  : 'Marcar como objetivo'}
+              </Button>
+              <Button variant="secondary" onClick={() => setSelectedChallenge(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

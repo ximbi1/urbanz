@@ -62,3 +62,10 @@ export interface MapChallenge {
   start_date?: string;
   end_date?: string;
 }
+
+export interface MapPoi {
+  id: string;
+  name: string;
+  category: 'park' | 'beach' | 'historic' | 'plaza';
+  coordinates: Coordinate[];
+}

@@ -1,7 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { polygon, area as turfArea, intersect, booleanPointInPolygon, point } from 'npm:@turf/turf@6.5.0'
 import webpush from 'npm:web-push@3.6.1'
-import parks from '../_shared/data/parks.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -207,14 +206,21 @@ const decrementDefenderProfile = async (profileId: string, pointsToRemove: numbe
     .eq('id', profileId)
 }
 
-const deriveParkTags = (runPolygon: any) => {
+const fetchMapPois = async () => {
+  const { data } = await supabaseAdmin
+    .from('map_pois')
+    .select('id, name, category, coordinates')
+  return data || []
+}
+
+const derivePoiTags = (runPolygon: any, pois: any[]) => {
   const tags: { type: string; name: string }[] = []
-  parks.forEach((park) => {
-    const turfPolygon = polygon([
-      park.coordinates.map(coord => [coord.lng, coord.lat])
-    ])
-    if (intersect(runPolygon, turfPolygon)) {
-      tags.push({ type: 'park', name: park.name })
+  pois.forEach((poi) => {
+    const coords = (poi.coordinates as any[])?.map((coord) => [coord.lng, coord.lat])
+    if (!coords || coords.length < 3) return
+    const poiPolygon = polygon([coords])
+    if (intersect(runPolygon, poiPolygon)) {
+      tags.push({ type: poi.category, name: poi.name })
     }
   })
   return tags
@@ -277,8 +283,8 @@ const awardMapChallenges = async (
   return completed
 }
 
-const updateTerritoryThemeTags = async (territoryId: string, runPolygon: any) => {
-  const tags = deriveParkTags(runPolygon)
+const updateTerritoryThemeTags = async (territoryId: string, runPolygon: any, pois: any[]) => {
+  const tags = derivePoiTags(runPolygon, pois)
   await supabaseAdmin
     .from('territories')
     .update({
@@ -406,6 +412,7 @@ Deno.serve(async (req) => {
     const protectedUntil = new Date(now.getTime() + PROTECTION_DURATION_MS).toISOString()
 
     const runPolygon = polygon([toPolygonCoords(path)])
+    const mapPois = await fetchMapPois()
 
     const { data: territories, error: territoriesError } = await supabaseAdmin
       .from('territories')
@@ -687,7 +694,7 @@ Deno.serve(async (req) => {
     }
 
     if (territoryId) {
-      poiTags = await updateTerritoryThemeTags(territoryId, runPolygon)
+      poiTags = await updateTerritoryThemeTags(territoryId, runPolygon, mapPois)
       const completedChallenges = await awardMapChallenges(
         user.id,
         runPolygon,
