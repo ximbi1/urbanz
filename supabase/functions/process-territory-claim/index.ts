@@ -295,6 +295,16 @@ const updateTerritoryThemeTags = async (territoryId: string, runPolygon: any, po
   return tags
 }
 
+const fetchActiveShield = async (territoryId: string) => {
+  const { data } = await supabaseAdmin
+    .from('territory_shields')
+    .select('*, user:profiles!territory_shields_user_id_fkey(username)')
+    .eq('territory_id', territoryId)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
+  return data
+}
+
 const sendPushNotification = async (
   userId: string | null,
   notification: { title: string; body: string; data?: Record<string, unknown>; tag?: string }
@@ -565,6 +575,15 @@ Deno.serve(async (req) => {
         )
       }
 
+      const activeShield = await fetchActiveShield(targetTerritory.id)
+      if (activeShield && targetTerritory.user_id !== user.id) {
+        await notifyDefender(`${attackerName} ha intentado atacar, pero tu escudo sigue activo.`)
+        return new Response(
+          JSON.stringify({ error: 'Este territorio está protegido con un escudo activo' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
       const newRequiredPace = calculateRequiredPace(avgPace, userLevel)
 
       const { data: updated, error: updateError } = await supabaseAdmin
@@ -616,6 +635,10 @@ Deno.serve(async (req) => {
 
       if (targetTerritory.user_id) {
         await decrementDefenderProfile(targetTerritory.user_id, targetTerritory.conquest_points)
+        await supabaseAdmin
+          .from('territory_shields')
+          .delete()
+          .eq('territory_id', targetTerritory.id)
         await notifyDefender(`${attackerName} conquistó uno de tus territorios.`)
       }
     } else if (isOwnTerritory && targetTerritory) {

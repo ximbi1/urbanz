@@ -69,3 +69,36 @@ export interface MapPoi {
   category: 'park' | 'beach' | 'historic' | 'plaza';
   coordinates: Coordinate[];
 }
+
+export interface TerritoryShield {
+  id: string;
+  territory_id: string;
+  user_id: string;
+  shield_type: 'consumable' | 'challenge';
+  expires_at: string;
+}
+
+export interface UserShield {
+  id: string;
+  user_id: string;
+  source: 'consumable' | 'challenge';
+  charges: number;
+}
+
+export type DuelType = 'distance' | 'territories' | 'points' | 'arena';
+export type DuelStatus = 'pending' | 'active' | 'completed';
+
+export interface Duel {
+  id: string;
+  challenger_id: string;
+  opponent_id: string;
+  status: DuelStatus;
+  duel_type: DuelType;
+  target_value: number;
+  challenger_progress: number;
+  opponent_progress: number;
+  start_at: string;
+  end_at: string;
+  arena_name?: string | null;
+  winner_id?: string | null;
+}

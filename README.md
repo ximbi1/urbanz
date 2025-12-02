@@ -32,6 +32,8 @@ URBANZ fusiona tres elementos:
 - **Metadatos persistentes**: Cada territorio guarda `protected_until`, `cooldown_until`, ritmo requerido y el historial de eventos para reconstruir disputas
 - **Territorios temáticos**: Detectamos parques y zonas emblemáticas para etiquetar la conquista.
 - **Retos en el mapa**: Pines especiales aparecen en MapView; rodea la zona para reclamar puntos extra.
+- **Centro de defensa**: Compra o reclama escudos (consumibles o por logros) y aplícalos a tus territorios para 12h/24h de protección.
+- **Duelos 1v1**: Reta a tus amigos a carreras de distancia/puntos o arenas neutrales y gana recompensas adicionales.
 
 ### 🎮 Progresión y Gamificación
 - **Sistema de niveles**: Gana XP por distancia, territorios y actividad
@@ -46,6 +48,7 @@ URBANZ fusiona tres elementos:
   - Amigos: Compite solo con tu círculo
 - **Feed de actividad**: Ve las carreras y conquistas recientes
 - **Notificaciones**: Alertas de logros, desafíos y actividad social
+- **Duelos 1v1**: Lanza retos personalizados a tus amigos y desbloquea recompensas extra
 
 ### 🛡️ Protección Anti-Exploit
 - **Filtrado GPS**: Solo acepta puntos con precisión <30m

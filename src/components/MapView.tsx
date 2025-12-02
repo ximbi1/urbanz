@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Locate, Users, User, Globe, X, SlidersHorizontal } from 'lucide-react';
+import { Locate, Users, User, Globe, X, SlidersHorizontal, ShieldPlus, Swords } from 'lucide-react';
+import { DefenseCenterModal } from './DefenseCenterModal';
+import { DuelModal } from './DuelModal';
 
 interface MapViewProps {
   runPath: Coordinate[];
@@ -40,6 +42,8 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showChallenges, setShowChallenges] = useState(true);
   const [showPois, setShowPois] = useState(false);
+  const [showDefenseCenter, setShowDefenseCenter] = useState(false);
+  const [showDuelModal, setShowDuelModal] = useState(false);
   const { user } = useAuth();
 
   // Cargar token de Mapbox desde edge function
@@ -828,6 +832,14 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
                 <Switch checked={showPois} onCheckedChange={setShowPois} />
               </div>
             </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setShowDefenseCenter(true)}>
+                <ShieldPlus className="h-4 w-4 mr-2" /> Centro de defensa
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowDuelModal(true)}>
+                <Swords className="h-4 w-4 mr-2" /> Duelos
+              </Button>
+            </div>
           </Card>
         )}
       </div>
@@ -889,6 +901,8 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
           </Card>
         </div>
       )}
+      {showDefenseCenter && <DefenseCenterModal onClose={() => setShowDefenseCenter(false)} />}
+      {showDuelModal && <DuelModal onClose={() => setShowDuelModal(false)} />}
     </div>
   );
 };

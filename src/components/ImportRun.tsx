@@ -230,6 +230,10 @@ export const ImportRun = ({ onImportComplete }: ImportRunProps) => {
                   .eq('id', user.id);
               }
 
+              await supabase
+                .from('user_shields')
+                .insert({ user_id: user.id, source: 'challenge', charges: 1 });
+
               // Crear notificación de desafío completado
               await supabase
                 .from('notifications')
@@ -248,6 +252,8 @@ export const ImportRun = ({ onImportComplete }: ImportRunProps) => {
         // No lanzar error, la carrera ya se guardó correctamente
       }
 
+      await updateActiveDuels(Math.round(parsedData.totalDistance), pointsGained, territoriesConquered + territoriesStolen);
+
       toast.success(`¡Carrera importada! ${territoriesConquered} territorios conquistados, ${territoriesStolen} robados.`);
       setParsedData(null);
       onImportComplete?.();
@@ -257,6 +263,51 @@ export const ImportRun = ({ onImportComplete }: ImportRunProps) => {
       toast.error(errorMsg);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const updateActiveDuels = async (distanceValue: number, pointsValue: number, territoriesValue: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try {
+      const { data: activeDuels } = await supabase
+        .from('duels')
+        .select('*')
+        .eq('status', 'active')
+        .or(`challenger_id.eq.${user.id},opponent_id.eq.${user.id}`);
+
+      if (!activeDuels) return;
+
+      for (const duel of activeDuels as any[]) {
+        const isChallenger = duel.challenger_id === user.id;
+        let increment = 0;
+
+        if (duel.duel_type === 'distance') increment = distanceValue;
+        else if (duel.duel_type === 'points') increment = pointsValue;
+        else if (duel.duel_type === 'territories') increment = territoriesValue;
+
+        if (increment <= 0) continue;
+
+        const progressField = isChallenger ? 'challenger_progress' : 'opponent_progress';
+        const newProgress = (duel[progressField] || 0) + increment;
+        const updates: Record<string, any> = { [progressField]: newProgress };
+        let completed = false;
+
+        if (newProgress >= duel.target_value) {
+          updates.status = 'completed';
+          updates.winner_id = user.id;
+          completed = true;
+        }
+
+        await supabase
+          .from('duels')
+          .update(updates)
+          .eq('id', duel.id);
+
+        if (completed) toast.success('🏁 ¡Has ganado un duelo!');
+      }
+    } catch (error) {
+      console.error('Error actualizando duelos (import)', error);
     }
   };
 
