@@ -301,19 +301,20 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
               </div>
             </div>
             <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              {isPlaying ? (
-                <Button variant="secondary" onClick={handlePause} className="flex-1">
-                  <Pause className="h-4 w-4 mr-2" /> Pausar
+              <div className="flex items-center gap-3">
+                {isPlaying ? (
+                  <Button variant="secondary" onClick={handlePause} className="flex-1">
+                    <Pause className="h-4 w-4 mr-2" /> Pausar
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={handlePlay} className="flex-1">
+                    <Play className="h-4 w-4 mr-2" /> {progress >= 1 ? 'Reproducir de nuevo' : 'Reanudar'}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={restartAnimation}>
+                  <RotateCcw className="h-4 w-4 mr-2" /> Reiniciar
                 </Button>
-              ) : (
-                <Button variant="secondary" onClick={handlePlay} className="flex-1">
-                  <Play className="h-4 w-4 mr-2" /> {progress >= 1 ? 'Reproducir de nuevo' : 'Reanudar'}
-                </Button>
-              )}
-              <Button variant="outline" onClick={restartAnimation}>
-                <RotateCcw className="h-4 w-4 mr-2" /> Reiniciar
-              </Button>
+              </div>
             </div>
           </div>
         )}
