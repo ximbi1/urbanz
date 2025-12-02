@@ -13,8 +13,8 @@ jobs:
       - name: Trigger send-engagement-pings
         env:
           SUPABASE_FUNCTION_URL: https://mingyhynzeoawsjnnpwj.functions.supabase.co/send-engagement-pings
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           curl -X POST "$SUPABASE_FUNCTION_URL" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
