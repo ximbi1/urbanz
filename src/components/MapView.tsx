@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Coordinate, Territory, MapChallenge, MapPoi } from '@/types/territory';
+import { calculatePolygonArea, calculatePerimeter } from '@/utils/geoCalculations';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -44,6 +45,10 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [showDistricts, setShowDistricts] = useState(false);
   const [districtFeatures, setDistrictFeatures] = useState<any[]>([]);
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
+  const selectedDistrict = useMemo(() => {
+    if (!selectedDistrictId) return null;
+    return districtFeatures.find((feature) => feature.properties?.id === selectedDistrictId) || null;
+  }, [districtFeatures, selectedDistrictId]);
   const { user } = useAuth();
 
   const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
@@ -449,17 +454,23 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   useEffect(() => {
     const districts = mapPois
       .filter(poi => poi.category === 'district' && poi.coordinates.length >= 3)
-      .map(poi => ({
-        type: 'Feature',
-        properties: {
-          id: poi.id,
-          name: poi.name,
-        },
-        geometry: {
-          type: 'Polygon' as const,
-          coordinates: [poi.coordinates.map(coord => [coord.lng, coord.lat])],
-        },
-      }));
+      .map(poi => {
+        const area = calculatePolygonArea(poi.coordinates);
+        const perimeter = calculatePerimeter(poi.coordinates);
+        return {
+          type: 'Feature',
+          properties: {
+            id: poi.id,
+            name: poi.name,
+            area,
+            perimeter,
+          },
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [poi.coordinates.map(coord => [coord.lng, coord.lat])],
+          },
+        };
+      });
     setDistrictFeatures(districts);
   }, [mapPois]);
 
@@ -859,11 +870,24 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       setSelectedDistrictId((prev) => (prev === id ? null : id));
     };
 
+    const handleMapClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      const features = map.current?.queryRenderedFeatures(e.point, {
+        layers: ['districts-outline', 'districts-highlight'],
+      });
+      if (!features || features.length === 0) {
+        setSelectedDistrictId(null);
+      }
+    };
+
     map.current.on('click', 'districts-outline', handleClick);
+    map.current.on('click', 'districts-highlight', handleClick);
+    map.current.on('click', handleMapClick);
 
     return () => {
       if (map.current) {
         map.current.off('click', 'districts-outline', handleClick);
+        map.current.off('click', 'districts-highlight', handleClick);
+        map.current.off('click', handleMapClick);
         if (map.current.getLayer('districts-outline')) map.current.removeLayer('districts-outline');
         if (map.current.getLayer('districts-highlight')) map.current.removeLayer('districts-highlight');
         if (map.current.getSource('districts')) map.current.removeSource('districts');
@@ -889,6 +913,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       return `${hours}h ${minutes}m restantes`;
     }
     return `${minutes}m restantes`;
+  };
+
+  const formatDistance = (meters: number) => {
+    if (!meters) return '0 km';
+    if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+    return `${meters.toFixed(0)} m`;
+  };
+
+  const formatAreaValue = (metersSquared: number) => {
+    if (!metersSquared) return '0 km²';
+    return `${(metersSquared / 1_000_000).toFixed(2)} km²`;
   };
 
   const toggleChallengeTarget = async (challenge: MapChallenge) => {
@@ -1155,6 +1190,37 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
               <Button variant="secondary" onClick={() => setSelectedChallenge(null)}>
                 Cerrar
               </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showDistricts && selectedDistrict && (
+        <div className="absolute bottom-4 left-4 z-[60] max-w-sm animate-fade-in">
+          <Card className="p-4 bg-background/95 border-glow">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Distrito seleccionado</p>
+                <h4 className="text-lg font-display font-semibold">{selectedDistrict.properties?.name}</h4>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedDistrictId(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Área aproximada</span>
+                <span className="font-semibold">
+                  {formatAreaValue(selectedDistrict.properties?.area || 0)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Perímetro</span>
+                <span className="font-semibold">{formatDistance(selectedDistrict.properties?.perimeter || 0)}</span>
+              </div>
+            </div>
+            <div className="mt-4 text-xs text-muted-foreground">
+              Rodea todo el contorno resaltado para reclamar el distrito completo. Usa escudos si quieres mantenerlo protegido.
             </div>
           </Card>
         </div>
