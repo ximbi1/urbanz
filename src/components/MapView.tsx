@@ -39,7 +39,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [targetLoading, setTargetLoading] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showChallenges, setShowChallenges] = useState(true);
-  const [showPois, setShowPois] = useState(false);
+  const [showParks, setShowParks] = useState(false);
+  const [showFountains, setShowFountains] = useState(false);
+  const [showDistricts, setShowDistricts] = useState(false);
   const { user } = useAuth();
 
   const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
@@ -702,14 +704,19 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
     poiMarkersRef.current.forEach(marker => marker.remove());
     poiMarkersRef.current = [];
-    if (!showPois) return;
+    if (!showParks && !showFountains && !showDistricts) return;
     const iconMap: Record<string, string> = {
       park: '🌳',
       beach: '🏖️',
       historic: '🏛️',
       plaza: '⛲',
+      fountain: '🚰',
+      district: '🗺️',
     };
     mapPois.forEach(poi => {
+      if (poi.category === 'park' && !showParks) return;
+      if (poi.category === 'fountain' && !showFountains) return;
+      if (poi.category === 'district' && !showDistricts) return;
       const el = document.createElement('div');
       el.style.width = '28px';
       el.style.height = '28px';
@@ -740,7 +747,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
       poiMarkersRef.current.push(marker);
     });
-  }, [mapPois, mapReady, showPois]);
+  }, [mapPois, mapReady, showParks, showFountains, showDistricts]);
 
   const formatDuration = (milliseconds: number) => {
     const totalMinutes = Math.floor(milliseconds / (60 * 1000));
@@ -947,8 +954,16 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
                 <Switch checked={showChallenges} onCheckedChange={setShowChallenges} />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Puntos de interés</span>
-                <Switch checked={showPois} onCheckedChange={setShowPois} />
+                <span className="text-sm">Parques</span>
+                <Switch checked={showParks} onCheckedChange={setShowParks} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Fuentes</span>
+                <Switch checked={showFountains} onCheckedChange={setShowFountains} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Barrios</span>
+                <Switch checked={showDistricts} onCheckedChange={setShowDistricts} />
               </div>
             </div>
           </Card>
