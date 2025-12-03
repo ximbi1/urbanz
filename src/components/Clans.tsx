@@ -124,6 +124,7 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
   const [joinLoading, setJoinLoading] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [messageLoading, setMessageLoading] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -291,7 +292,12 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
       toast.error('El clan necesita un nombre.');
       return;
     }
+    if (membership) {
+      toast.error('Ya perteneces a un clan. Abandónalo antes de fundar uno nuevo.');
+      return;
+    }
     setCreateLoading(true);
+    let createdClanId: string | null = null;
     try {
       const { data: clan, error } = await supabase
         .from('clans')
@@ -305,6 +311,7 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
         .single();
 
       if (error) throw error;
+      createdClanId = clan.id;
 
       const { error: memberError } = await supabase
         .from('clan_members')
@@ -326,6 +333,9 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
       await Promise.all([loadMembership(), loadTopClans()]);
     } catch (error) {
       console.error('No se pudo crear el clan:', error);
+      if (createdClanId) {
+        await supabase.from('clans').delete().eq('id', createdClanId);
+      }
       toast.error('Error creando el clan');
     } finally {
       setCreateLoading(false);
@@ -334,6 +344,14 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
 
   const handleJoinClan = async (clanId: string) => {
     if (!user) return;
+    if (membership) {
+      if (membership.clan?.id === clanId) {
+        toast.info('Ya perteneces a este clan.');
+      } else {
+        toast.error('Debes salir de tu clan actual antes de unirte a otro.');
+      }
+      return;
+    }
     setJoinLoading(clanId);
     try {
       const { error } = await supabase
@@ -355,9 +373,34 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
       await Promise.all([loadMembership(), loadTopClans()]);
     } catch (error) {
       console.error('Error uniéndose al clan:', error);
-      toast.error('No se pudo unir al clan');
+      if ((error as any)?.code === '23505') {
+        toast.error('Ya formas parte de un clan.');
+      } else {
+        toast.error('No se pudo unir al clan');
+      }
     } finally {
       setJoinLoading(null);
+    }
+  };
+
+  const handleLeaveClan = async () => {
+    if (!membership?.id) return;
+    if (!confirm('¿Seguro que quieres abandonar tu clan actual?')) return;
+    setLeaveLoading(true);
+    try {
+      await supabase
+        .from('clan_members')
+        .delete()
+        .eq('id', membership.id);
+
+      toast.success('Has abandonado el clan');
+      setMembership(null);
+      await Promise.all([loadTopClans(), loadMembership()]);
+    } catch (error) {
+      console.error('No se pudo abandonar el clan:', error);
+      toast.error('Error al abandonar el clan');
+    } finally {
+      setLeaveLoading(false);
     }
   };
 
@@ -437,9 +480,19 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
                   {membership.clan.name}
                 </h2>
               </div>
-              <Badge variant="outline" className="uppercase tracking-widest">
-                {membership.role}
-              </Badge>
+              <div className="flex flex-col items-end gap-2">
+                <Badge variant="outline" className="uppercase tracking-widest">
+                  {membership.role}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleLeaveClan}
+                  disabled={leaveLoading}
+                >
+                  {leaveLoading ? 'Saliendo...' : 'Abandonar clan'}
+                </Button>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground">
               {membership.clan.description || 'Coordina las conquistas urbanas con tu escuadrón para dominar la ciudad.'}
