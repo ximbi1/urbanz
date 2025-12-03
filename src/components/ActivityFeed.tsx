@@ -641,7 +641,9 @@ const ActivityFeed = ({ onClose, isMobileFullPage = false }: ActivityFeedProps) 
 
   const combinedFeed: FeedItem[] = useMemo(() => {
     const runItems = activities.map((activity) => ({ type: 'run', data: activity }) as FeedItem);
-    const clanItems = clanEvents.map((event) => ({ type: 'clan', data: event }) as FeedItem);
+    const clanItems = clanEvents
+      .filter((event) => event.event_type !== 'custom_update')
+      .map((event) => ({ type: 'clan', data: event }) as FeedItem);
     return [...runItems, ...clanItems].sort(
       (a, b) => new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime()
     );

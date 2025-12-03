@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Shield, Sparkles, Target, Trophy, Megaphone, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users, ChevronDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -136,6 +136,12 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [missionsOpen, setMissionsOpen] = useState(true);
   const [membersOpen, setMembersOpen] = useState(true);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (chatListRef.current) {
+      chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+    }
+  }, [clanFeed]);
 
   useEffect(() => {
     if (!user) return;
@@ -538,56 +544,59 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     enabled: isMobileFullPage,
   });
 
-  const renderClanChat = () => (
-    <Card className="border border-border overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between bg-muted/20 border-b border-border">
-        <div>
-          <p className="text-sm font-semibold flex items-center gap-2">
-            <Megaphone className="w-4 h-4 text-primary" /> Chat del clan
-          </p>
-          <p className="text-xs text-muted-foreground">Se actualiza en tiempo real</p>
+  const renderClanChat = () => {
+    const messages = [...clanFeed].reverse();
+    return (
+      <Card className="border border-border overflow-hidden">
+        <div className="px-4 py-3 flex items-center justify-between bg-muted/20 border-b border-border">
+          <div>
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <Megaphone className="w-4 h-4 text-primary" /> Chat del clan
+            </p>
+            <p className="text-xs text-muted-foreground">Se actualiza en tiempo real</p>
+          </div>
+          <Badge variant="outline" className="uppercase tracking-widest">
+            {membership?.role}
+          </Badge>
         </div>
-        <Badge variant="outline" className="uppercase tracking-widest">
-          {membership?.role}
-        </Badge>
-      </div>
-      <div className="px-4 py-3 flex flex-col gap-2 bg-background/60 max-h-80 overflow-y-auto">
-        {clanFeed.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay mensajes. Inicia la conversación.</p>
-        ) : (
-          clanFeed.map((event) => {
-            const isMine = event.user_id && user && event.user_id === user.id;
-            const messageText = getClanEventMessage(event);
-            return (
-              <div key={event.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
-                  isMine ? 'bg-primary/20 text-primary-foreground border border-primary/30' : 'bg-card border border-border/60'
-                }`}>
-                  <div className="text-xs text-muted-foreground flex items-center gap-2 mb-1">
-                    <span>{event.user?.username || 'Sistema'}</span>
-                    <span>{new Date(event.created_at).toLocaleTimeString()}</span>
+        <div ref={chatListRef} className="px-4 py-3 flex flex-col gap-2 bg-background/60 max-h-80 overflow-y-auto">
+          {messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todavía no hay mensajes. Inicia la conversación.</p>
+          ) : (
+            messages.map((event) => {
+              const isMine = event.user_id && user && event.user_id === user.id;
+              const messageText = getClanEventMessage(event);
+              return (
+                <div key={event.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                    isMine ? 'bg-primary/20 text-primary-foreground border border-primary/30' : 'bg-card border border-border/60'
+                  }`}>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 mb-1">
+                      <span>{event.user?.username || 'Sistema'}</span>
+                      <span>{new Date(event.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <p>{messageText}</p>
                   </div>
-                  <p>{messageText}</p>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <div className="px-4 py-3 bg-card/80 border-t border-border space-y-2">
-        <Textarea
-          placeholder="Comparte la próxima misión o felicita a tus compañeros"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
-        <div className="flex justify-end">
-          <Button size="sm" onClick={handleSendMessage} disabled={messageLoading || !message.trim()}>
-            {messageLoading ? 'Enviando...' : 'Enviar al clan'}
-          </Button>
+              );
+            })
+          )}
         </div>
-      </div>
-    </Card>
-  );
+        <div className="px-4 py-3 bg-card/80 border-t border-border space-y-2">
+          <Textarea
+            placeholder="Comparte la próxima misión o felicita a tus compañeros"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleSendMessage} disabled={messageLoading || !message.trim()}>
+              {messageLoading ? 'Enviando...' : 'Enviar al clan'}
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   const renderMemberView = () => (
     <>
