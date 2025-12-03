@@ -46,17 +46,33 @@ interface Mission {
   completed?: boolean;
 }
 
+interface MapTarget {
+  id: string;
+  challenge: {
+    id: string;
+    name: string;
+    description: string | null;
+    latitude: number;
+    longitude: number;
+    radius: number;
+    reward_points: number;
+  } | null;
+}
+
 const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
   const { user } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [missionsLoading, setMissionsLoading] = useState(true);
+  const [mapTargets, setMapTargets] = useState<MapTarget[]>([]);
+  const [mapTargetsLoading, setMapTargetsLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       loadChallenges();
       loadMissions();
+      loadMapTargets();
     }
   }, [user]);
 
@@ -238,7 +254,7 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
 
   const { containerRef, isRefreshing, pullDistance, progress } = usePullToRefresh({
     onRefresh: async () => {
-      await Promise.all([loadChallenges(), loadMissions()]);
+      await Promise.all([loadChallenges(), loadMissions(), loadMapTargets()]);
     },
     enabled: isMobileFullPage,
   });
@@ -272,6 +288,44 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
       district: 'Barrios',
     };
     return labels[type];
+  };
+
+  const loadMapTargets = async () => {
+    if (!user) return;
+    setMapTargetsLoading(true);
+    const { data, error } = await supabase
+      .from('map_challenge_targets')
+      .select(`
+        id,
+        challenge:map_challenges (id, name, description, latitude, longitude, radius, reward_points)
+      `)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error cargando objetivos del mapa:', error);
+      toast.error('No se pudieron cargar tus objetivos del mapa');
+      setMapTargets([]);
+    } else {
+      setMapTargets((data || []) as MapTarget[]);
+    }
+    setMapTargetsLoading(false);
+  };
+
+  const removeMapTarget = async (targetId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('map_challenge_targets')
+        .delete()
+        .eq('id', targetId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      setMapTargets((prev) => prev.filter((target) => target.id !== targetId));
+      toast.success('Objetivo eliminado');
+    } catch (error) {
+      console.error('Error eliminando objetivo de mapa:', error);
+      toast.error('No se pudo eliminar el objetivo');
+    }
   };
 
   const renderMissionSection = () => (
@@ -327,6 +381,44 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
               </Card>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMapTargetsSection = () => (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Map className="w-5 h-5 text-primary" />
+        <h3 className="text-lg font-display font-bold">Objetivos seleccionados en el mapa</h3>
+      </div>
+      {mapTargetsLoading ? (
+        <Card className="p-4 bg-muted/30 border-border text-sm text-muted-foreground">
+          Cargando objetivos del mapa...
+        </Card>
+      ) : mapTargets.length === 0 ? (
+        <Card className="p-4 bg-muted/20 border-dashed border-border text-sm text-muted-foreground">
+          Marca un reto del mapa desde la vista principal para verlo aquí.
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {mapTargets.map((target) => (
+            <Card key={target.id} className="p-4 bg-card/80 border-border flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">{target.challenge?.name || 'Objetivo del mapa'}</p>
+                <p className="text-sm text-muted-foreground">
+                  {target.challenge?.description || 'Explora el área indicada para completarlo.'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Lat: {target.challenge?.latitude?.toFixed(3)} · Lng: {target.challenge?.longitude?.toFixed(3)}
+                </p>
+                <p className="text-xs text-primary mt-1">Recompensa: +{target.challenge?.reward_points || 0} pts</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => removeMapTarget(target.id)}>
+                Quitar
+              </Button>
+            </Card>
+          ))}
         </div>
       )}
     </div>
@@ -454,6 +546,9 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
 
           <div className="pt-4 border-t border-border">
             {renderMissionSection()}
+            <div className="mt-6">
+              {renderMapTargetsSection()}
+            </div>
           </div>
 
           {/* Challenges content */}
@@ -499,6 +594,9 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
           <p>Completa misiones dinámicas y desafíos semanales para ganar recompensas extra.</p>
           <div className="pt-2 border-t border-border">
             {renderMissionSection()}
+            <div className="mt-6">
+              {renderMapTargetsSection()}
+            </div>
           </div>
         </div>
 
