@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Shield, Sparkles, MapPin, Target, Trophy, Megaphone, Compass, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X } from 'lucide-react';
+import { Shield, Sparkles, MapPin, Target, Trophy, Megaphone, Compass, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
