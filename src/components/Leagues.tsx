@@ -31,6 +31,15 @@ interface Season {
   end_date: string;
 }
 
+interface ClanHighlight {
+  id: string;
+  name: string;
+  description: string | null;
+  banner_color: string | null;
+  total_points: number;
+  territories_controlled: number;
+}
+
 const LEAGUE_CONFIG = {
   legend: { name: 'Leyenda', icon: Crown, color: 'text-warning', min: 7000 },
   diamond: { name: 'Diamante', icon: Gem, color: 'text-secondary', min: 3500 },
@@ -46,6 +55,7 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
   const [viewMode, setViewMode] = useState<'my-league' | 'friends'>('my-league');
   const [currentSeason, setCurrentSeason] = useState<Season | null>(null);
   const [userLeague, setUserLeague] = useState<string>('bronze');
+  const [topClans, setTopClans] = useState<ClanHighlight[]>([]);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -53,6 +63,7 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
     loadUserLeague();
     loadMyLeagueRankings();
     loadFriendsLeagues();
+    loadTopClans();
   }, []);
 
   const loadCurrentSeason = async () => {
@@ -173,6 +184,21 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
     }
   };
 
+  const loadTopClans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clans')
+        .select('id, name, description, banner_color, total_points, territories_controlled')
+        .order('total_points', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setTopClans(data || []);
+    } catch (error) {
+      console.error('Error cargando mejores clanes:', error);
+    }
+  };
+
   const getLeagueIcon = (league: string) => {
     const config = LEAGUE_CONFIG[league as keyof typeof LEAGUE_CONFIG];
     if (!config) return null;
@@ -190,6 +216,39 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
     if (position === 2) return <Medal className="w-5 h-5 text-[#CD7F32]" />;
     return null;
   };
+
+  const renderTopClansCard = () => (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Crown className="w-4 h-4 text-primary" />
+        <div>
+          <h3 className="font-semibold">Mejores clanes</h3>
+          <p className="text-xs text-muted-foreground">Basado en puntos de influencia</p>
+        </div>
+      </div>
+      {topClans.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aún no hay clanes registrados.</p>
+      ) : (
+        <div className="space-y-2">
+          {topClans.map((clan, index) => (
+            <div key={clan.id} className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+              <div>
+                <p className="font-semibold flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">#{index + 1}</span>
+                  {clan.name}
+                </p>
+                <p className="text-xs text-muted-foreground">{clan.description || 'Clan en expansión urbana'}</p>
+              </div>
+              <div className="text-right text-sm">
+                <p className="font-semibold">{clan.total_points} pts</p>
+                <p className="text-xs text-muted-foreground">{clan.territories_controlled} territorios</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
 
   if (isMobileFullPage) {
     return (
@@ -309,12 +368,15 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
                   </div>
                 ))
               )
-            )}
-          </div>
+          )}
+        </div>
+        <div className="pt-2">
+          {renderTopClansCard()}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -436,6 +498,9 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
               ))
             )
           )}
+        </div>
+        <div className="pt-2">
+          {renderTopClansCard()}
         </div>
       </Card>
     </div>

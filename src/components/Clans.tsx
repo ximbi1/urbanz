@@ -39,6 +39,14 @@ interface ClanMembership {
   };
 }
 
+interface ClanMemberSummary {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  color: string | null;
+  contribution_points: number;
+}
+
 interface ClanMission {
   id: string;
   clan_id: string;
@@ -118,6 +126,7 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
   const [topClans, setTopClans] = useState<ClanSummary[]>([]);
   const [clanFeed, setClanFeed] = useState<ClanEvent[]>([]);
   const [recommendedPois, setRecommendedPois] = useState<MapPoi[]>([]);
+  const [clanMembers, setClanMembers] = useState<ClanMemberSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', description: '', color: '#2563eb' });
@@ -181,11 +190,13 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
         await Promise.all([
           loadClanMissions(membershipData.clan.id),
           loadClanFeed(membershipData.clan.id),
+          loadClanMembers(membershipData.clan.id),
         ]);
       } else {
         setMissions([]);
         setClanFeed([]);
         setRecommendedPois([]);
+        setClanMembers([]);
       }
     } catch (error) {
       console.error('Error cargando clan:', error);
@@ -256,6 +267,39 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     } catch (error) {
       console.error('Feed de clan no disponible:', error);
       setClanFeed([]);
+    }
+  };
+
+  const loadClanMembers = async (clanId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('clan_members')
+        .select(`
+          id,
+          contribution_points,
+          profiles:profiles!clan_members_user_id_fkey (username, avatar_url, color)
+        `)
+        .eq('clan_id', clanId)
+        .order('contribution_points', { ascending: false })
+        .limit(12);
+
+      if (error) {
+        console.error('Error cargando miembros del clan:', error);
+        setClanMembers([]);
+        return;
+      }
+
+      const formatted = (data || []).map((row) => ({
+        id: row.id,
+        username: row.profiles?.username || 'Miembro',
+        avatar_url: row.profiles?.avatar_url || null,
+        color: row.profiles?.color || null,
+        contribution_points: row.contribution_points || 0,
+      }));
+      setClanMembers(formatted);
+    } catch (error) {
+      console.error('Miembros del clan no disponibles:', error);
+      setClanMembers([]);
     }
   };
 
@@ -353,11 +397,12 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
 
       toast.success('Clan creado correctamente');
       setCreateForm({ name: '', description: '', color: '#2563eb' });
-      await Promise.all([
-        loadClanMissions(clan.id),
-        loadClanFeed(clan.id),
-        loadTopClans(),
-      ]);
+        await Promise.all([
+          loadClanMissions(clan.id),
+          loadClanFeed(clan.id),
+          loadClanMembers(clan.id),
+          loadTopClans(),
+        ]);
     } catch (error) {
       console.error('No se pudo crear el clan:', error);
       if (createdClanId) {
@@ -406,11 +451,12 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
         });
 
       toast.success('¡Bienvenido al clan!');
-      await Promise.all([
-        loadClanMissions(clanId),
-        loadClanFeed(clanId),
-        loadTopClans(),
-      ]);
+        await Promise.all([
+          loadClanMissions(clanId),
+          loadClanFeed(clanId),
+          loadClanMembers(clanId),
+          loadTopClans(),
+        ]);
     } catch (error) {
       console.error('Error uniéndose al clan:', error);
       if ((error as any)?.code === '23505') {
@@ -435,7 +481,11 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
 
       toast.success('Has abandonado el clan');
       setMembership(null);
-      await Promise.all([loadTopClans(), loadMembership()]);
+      setMissions([]);
+      setClanFeed([]);
+      setRecommendedPois([]);
+      setClanMembers([]);
+      await loadTopClans();
     } catch (error) {
       console.error('No se pudo abandonar el clan:', error);
       toast.error('Error al abandonar el clan');
@@ -486,30 +536,97 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     return map;
   }, [recommendedPois]);
 
-  const renderContent = () => (
-    <>
-      <PullToRefreshIndicator
-        isRefreshing={isRefreshing || refreshing}
-        pullDistance={pullDistance}
-        progress={progress}
-      />
-
-      {!membership && (
-        <Card className="p-4 border-dashed">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Shield className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg">Únete o crea un clan</h3>
-              <p className="text-sm text-muted-foreground">
-                Coordina ataques, comparte objetivos y desbloquea misiones colaborativas usando los POIs reales de la ciudad.
+  const renderClanChat = () => (
+    <Card className="p-4 flex flex-col h-full">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Megaphone className="w-4 h-4 text-primary" />
+          <div>
+            <h3 className="font-semibold">Chat del clan</h3>
+            <p className="text-xs text-muted-foreground">Organiza ofensivas y comparte novedades</p>
+          </div>
+        </div>
+        <Badge variant="outline" className="uppercase tracking-widest">
+          {membership?.role}
+        </Badge>
+      </div>
+      <div className="flex-1 mt-3 space-y-3 overflow-y-auto max-h-72 pr-1">
+        {clanFeed.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay mensajes. Inicia la conversación.</p>
+        ) : (
+          clanFeed.map((event) => (
+            <div key={event.id} className="rounded-lg border border-border/70 p-3 bg-card/60">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                <span>{event.user?.username || 'Sistema'}</span>
+                <span>{new Date(event.created_at).toLocaleString()}</span>
+              </div>
+              <p className="text-sm">
+                {event.event_type === 'mission_completed' && `🎯 ${event.payload?.missionName || 'Misión completada'} · +${event.payload?.rewardPoints || 0} pts`}
+                {event.event_type === 'run_contribution' && `${event.user?.username || 'Un miembro'} aportó ${event.payload?.points || 0} pts y ${event.payload?.territories || 0} territorios.`}
+                {event.event_type === 'custom_update' && event.payload?.message}
+                {event.event_type === 'new_member' && `${event.user?.username || 'Nuevo miembro'} se ha unido.`}
+                {event.event_type === 'territory_help' && `${event.user?.username || 'Miembro'} reforzó ${event.payload?.territoryName || 'un territorio'}.`}
+                {!['mission_completed','run_contribution','custom_update','new_member','territory_help'].includes(event.event_type) && (event.payload?.message || 'Actividad reciente')}
               </p>
             </div>
-          </div>
-        </Card>
-      )}
+          ))
+        )}
+      </div>
+      <div className="mt-3 space-y-2">
+        <Textarea
+          placeholder="Comparte la próxima misión o felicita a tus compañeros"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
+        <div className="flex justify-end">
+          <Button size="sm" onClick={handleSendMessage} disabled={messageLoading || !message.trim()}>
+            {messageLoading ? 'Enviando...' : 'Enviar al clan'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
 
+  const renderMembersCard = () => (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-primary" />
+        <div>
+          <h3 className="font-semibold">Miembros destacados</h3>
+          <p className="text-xs text-muted-foreground">Contribuciones recientes</p>
+        </div>
+      </div>
+      {clanMembers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Invita a tus amigos para formar la primera escuadra.</p>
+      ) : (
+        <div className="space-y-2">
+          {clanMembers.map((member) => (
+            <div key={member.id} className="flex items-center justify-between rounded-lg border border-border/60 p-2">
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-8 w-8 rounded-full flex items-center justify-center border"
+                  style={{ borderColor: member.color || 'rgba(59,130,246,0.4)' }}
+                >
+                  {member.avatar_url ? (
+                    <img src={member.avatar_url} alt={member.username} className="h-full w-full rounded-full object-cover" />
+                  ) : (
+                    <span className="text-sm font-semibold">{member.username.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{member.username}</p>
+                  <p className="text-xs text-muted-foreground">{member.contribution_points} pts</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+
+  const renderMemberView = () => (
+    <>
       {membership && (
         <Card className="p-5 bg-gradient-to-br from-primary/10 via-background to-background border border-primary/30">
           <div className="flex flex-col gap-3">
@@ -520,19 +637,14 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
                   {membership.clan?.name || 'Clan sin nombre'}
                 </h2>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <Badge variant="outline" className="uppercase tracking-widest">
-                  {membership.role}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleLeaveClan}
-                  disabled={leaveLoading}
-                >
-                  {leaveLoading ? 'Saliendo...' : 'Abandonar clan'}
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleLeaveClan}
+                disabled={leaveLoading}
+              >
+                {leaveLoading ? 'Saliendo...' : 'Abandonar clan'}
+              </Button>
             </div>
             <p className="text-sm text-muted-foreground">
               {membership.clan?.description || 'Coordina las conquistas urbanas con tu escuadrón para dominar la ciudad.'}
@@ -553,7 +665,7 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
               <div className="p-3 rounded-lg bg-card/60 border border-border/60">
                 <p className="text-xs text-muted-foreground">Antigüedad</p>
                 <p className="text-xl font-bold">
-                  {new Date(membership.clan.created_at).toLocaleDateString()}
+                  {membership.clan?.created_at ? new Date(membership.clan.created_at).toLocaleDateString() : '—'}
                 </p>
               </div>
             </div>
@@ -561,211 +673,191 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
         </Card>
       )}
 
-      {membership && missions.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" /> Misiones colaborativas
-            </h3>
-            {isRefreshing && <span className="text-xs text-muted-foreground">Actualizando...</span>}
-          </div>
-          <div className="grid md:grid-cols-2 gap-3">
-            {missions.map((mission) => {
-              const meta = missionMeta[mission.mission_type];
-              const progressPercent = Math.min((mission.current_progress / mission.target_count) * 100, 100);
-              const remaining = Math.max(mission.target_count - mission.current_progress, 0);
-              return (
-                <Card
-                  key={mission.id}
-                  className={`p-4 border ${meta.accent} bg-gradient-to-br`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 font-semibold">
-                      {meta.icon}
-                      <span>{meta.label}</span>
-                    </div>
-                    <Badge variant={mission.active ? 'default' : 'outline'}>
-                      {mission.active ? 'Activa' : 'Completada'}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3">{meta.helper}</p>
-                  <Progress value={progressPercent} className="h-2" />
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
-                    <span>{mission.current_progress}/{mission.target_count}</span>
-                    <span>{remaining === 0 ? 'Objetivo alcanzado' : `Faltan ${remaining}`}</span>
-                  </div>
-                  {(mission.reward_points > 0 || mission.reward_shields > 0) && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
-                      <Trophy className="w-3 h-3" />
-                      <span>
-                        Recompensas: {mission.reward_points ? `+${mission.reward_points} pts` : ''}{mission.reward_points && mission.reward_shields ? ' · ' : ''}{mission.reward_shields ? `${mission.reward_shields} escudo` : ''}
-                      </span>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {membership && Object.keys(recommendedByCategory).length > 0 && (
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" />
-            <div>
-              <h3 className="font-semibold">POIs recomendados</h3>
-              <p className="text-sm text-muted-foreground">Basado en los datos OSM justo para tus misiones activas</p>
-            </div>
-          </div>
-          <div className="grid md:grid-cols-3 gap-3">
-            {Object.entries(recommendedByCategory).map(([category, pois]) => (
-              <div key={category} className="rounded-lg border border-dashed border-border/60 p-3">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">{category}</p>
-                <ul className="space-y-1 text-sm">
-                  {pois.slice(0, 4).map((poi) => (
-                    <li key={poi.id} className="flex items-center gap-2">
-                      <Compass className="w-3 h-3 text-primary" />
-                      <span>{poi.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {membership && (
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Megaphone className="w-4 h-4 text-primary" />
-              <div>
-                <h3 className="font-semibold">Coordinación rápida</h3>
-                <p className="text-xs text-muted-foreground">Envía un mensaje breve al feed del clan</p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" disabled={messageLoading || !message.trim()} onClick={handleSendMessage}>
-              {messageLoading ? 'Enviando...' : 'Compartir'}
-            </Button>
-          </div>
-          <Textarea
-            placeholder="Ejem: Patrulla nocturna por el parque del Retiro. Necesitamos refuerzos."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-        </Card>
-      )}
-
-      {membership && (
-        <Card className="p-4">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" /> Feed del clan
-          </h3>
-          {clanFeed.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Todavía no hay eventos. Coordina una carrera para generar actividad.</p>
-          ) : (
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 space-y-4">
+          {missions.length > 0 && (
             <div className="space-y-3">
-              {clanFeed.map((event) => (
-                <div key={event.id} className="rounded-lg border border-border/70 p-3 bg-card/60">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span>{event.user?.username || 'Sistema'}</span>
-                    <span>{new Date(event.created_at).toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm">
-                    {event.event_type === 'mission_completed' && `🎯 ${event.payload?.missionName || 'Misión completada'} · +${event.payload?.rewardPoints || 0} pts`}
-                    {event.event_type === 'run_contribution' && `${event.user?.username || 'Un miembro'} aportó ${event.payload?.points || 0} pts y ${event.payload?.territories || 0} territorios.`}
-                    {event.event_type === 'custom_update' && event.payload?.message}
-                    {event.event_type === 'new_member' && `${event.user?.username || 'Nuevo miembro'} se ha unido.`}
-                    {event.event_type === 'territory_help' && `${event.user?.username || 'Miembro'} reforzó ${event.payload?.territoryName || 'un territorio'}.`}
-                    {!['mission_completed','run_contribution','custom_update','new_member','territory_help'].includes(event.event_type) && (event.payload?.message || 'Actividad reciente')}
-                  </p>
-                </div>
-              ))}
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" /> Misiones colaborativas
+                </h3>
+                {isRefreshing && <span className="text-xs text-muted-foreground">Actualizando...</span>}
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                {missions.map((mission) => {
+                  const meta = missionMeta[mission.mission_type];
+                  const progressPercent = Math.min((mission.current_progress / mission.target_count) * 100, 100);
+                  const remaining = Math.max(mission.target_count - mission.current_progress, 0);
+                  return (
+                    <Card
+                      key={mission.id}
+                      className={`p-4 border ${meta.accent} bg-gradient-to-br`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 font-semibold">
+                          {meta.icon}
+                          <span>{meta.label}</span>
+                        </div>
+                        <Badge variant={mission.active ? 'default' : 'outline'}>
+                          {mission.active ? 'Activa' : 'Completada'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">{meta.helper}</p>
+                      <Progress value={progressPercent} className="h-2" />
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                        <span>{mission.current_progress}/{mission.target_count}</span>
+                        <span>{remaining === 0 ? 'Objetivo alcanzado' : `Faltan ${remaining}`}</span>
+                      </div>
+                      {(mission.reward_points > 0 || mission.reward_shields > 0) && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3">
+                          <Trophy className="w-3 h-3" />
+                          <span>
+                            Recompensas: {mission.reward_points ? `+${mission.reward_points} pts` : ''}{mission.reward_points && mission.reward_shields ? ' · ' : ''}{mission.reward_shields ? `${mission.reward_shields} escudo` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </Card>
-      )}
+
+          {Object.keys(recommendedByCategory).length > 0 && (
+            <Card className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                <div>
+                  <h3 className="font-semibold">POIs para misiones</h3>
+                  <p className="text-sm text-muted-foreground">Lugares claves según tus retos actuales</p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-3 gap-3">
+                {Object.entries(recommendedByCategory).map(([category, pois]) => (
+                  <div key={category} className="rounded-lg border border-dashed border-border/60 p-3">
+                    <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">{category}</p>
+                    <ul className="space-y-1 text-sm">
+                      {pois.slice(0, 4).map((poi) => (
+                        <li key={poi.id} className="flex items-center gap-2">
+                          <Compass className="w-3 h-3 text-primary" />
+                          <span>{poi.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {renderClanChat()}
+        </div>
+
+        <div className="space-y-4">
+          {renderMembersCard()}
+        </div>
+      </div>
+    </>
+  );
+
+  const renderNonMemberView = () => (
+    <>
+      <Card className="p-4 border-dashed">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <Shield className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">Únete o crea un clan</h3>
+            <p className="text-sm text-muted-foreground">
+              Coordina ataques, comparte objetivos y desbloquea misiones colaborativas usando los POIs reales de la ciudad.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-primary" />
+          <Users className="w-4 h-4 text-primary" />
           <div>
-            <h3 className="font-semibold">Ranking de clanes</h3>
-            <p className="text-xs text-muted-foreground">Top 10 basado en puntos totales</p>
+            <h3 className="font-semibold">Clanes destacados</h3>
+            <p className="text-xs text-muted-foreground">Elige uno para sumarte al instante</p>
           </div>
         </div>
         {topClans.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aún no hay clanes creados.</p>
         ) : (
           <div className="space-y-2">
-            {topClans.map((clan, index) => (
+            {topClans.map((clan) => (
               <div
                 key={clan.id}
                 className="flex items-center justify-between rounded-lg border border-border/60 p-3"
               >
                 <div>
-                  <p className="font-semibold flex items-center gap-2">
-                    <span className="text-muted-foreground text-xs">#{index + 1}</span>
-                    {clan.name}
-                  </p>
+                  <p className="font-semibold">{clan.name}</p>
                   <p className="text-xs text-muted-foreground">{clan.description || 'Clan activo en expansión urbana'}</p>
                 </div>
                 <div className="text-right text-sm">
                   <p className="font-semibold">{clan.total_points} pts</p>
                   <p className="text-xs text-muted-foreground">{clan.territories_controlled} territorios</p>
                 </div>
-                {!membership && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!!membership || joinLoading === clan.id}
-                    onClick={() => handleJoinClan(clan.id)}
-                  >
-                    {joinLoading === clan.id ? 'Unificando...' : 'Unirme'}
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={joinLoading === clan.id}
+                  onClick={() => handleJoinClan(clan.id)}
+                >
+                  {joinLoading === clan.id ? 'Uniendo...' : 'Unirme'}
+                </Button>
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      {!membership && (
-        <Card className="p-4 space-y-3">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Plus className="w-4 h-4 text-primary" /> Crear un clan
-          </h3>
-          <div className="space-y-2">
-            <Input
-              placeholder="Nombre del clan"
-              value={createForm.name}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
+      <Card className="p-4 space-y-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Plus className="w-4 h-4 text-primary" /> Crear un clan
+        </h3>
+        <div className="space-y-2">
+          <Input
+            placeholder="Nombre del clan"
+            value={createForm.name}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
+          />
+          <Textarea
+            placeholder="Describe el estilo del clan y vuestra estrategia."
+            value={createForm.description}
+            onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">Color del banner</label>
+            <input
+              type="color"
+              value={createForm.color}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, color: e.target.value }))}
+              className="h-8 w-16 rounded border border-border bg-background"
             />
-            <Textarea
-              placeholder="Describe el estilo del clan y vuestra estrategia."
-              value={createForm.description}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-            />
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-muted-foreground">Color del banner</label>
-              <input
-                type="color"
-                value={createForm.color}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, color: e.target.value }))}
-                className="h-8 w-16 rounded border border-border bg-background"
-              />
-            </div>
-            <Button onClick={handleCreateClan} disabled={createLoading}>
-              {createLoading ? 'Creando...' : 'Fundar clan'}
-            </Button>
           </div>
-        </Card>
-      )}
+          <Button onClick={handleCreateClan} disabled={createLoading}>
+            {createLoading ? 'Creando...' : 'Fundar clan'}
+          </Button>
+        </div>
+      </Card>
     </>
   );
 
+  const renderContent = () => (
+    <>
+      <PullToRefreshIndicator
+        isRefreshing={isRefreshing || refreshing}
+        pullDistance={pullDistance}
+        progress={progress}
+      />
+
+      {membership ? renderMemberView() : renderNonMemberView()}
+    </>
+  );
   if (isMobileFullPage) {
     return (
       <div className="w-full h-full flex flex-col bg-background">

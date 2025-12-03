@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { usePushNotifications } from "./hooks/usePushNotifications";
+import PWAUpdater from "./components/PWAUpdater";
 
 const queryClient = new QueryClient();
 
@@ -10,6 +11,7 @@ const App = () => {
   usePushNotifications();
   return (
     <QueryClientProvider client={queryClient}>
+      <PWAUpdater />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="*" element={<NotFound />} />
