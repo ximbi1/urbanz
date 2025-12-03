@@ -397,27 +397,32 @@ Todas las tablas tienen RLS habilitado:
 
 ## 🔮 Roadmap y Futuras Mejoras
 
+### ✅ Lanzado recientemente
+- [x] Sistema de escudos protectores (compra/aplicación y visualización en mapa)
+- [x] Duelos 1v1 con amigos y tracking automático
+- [x] Temporadas con puntuación de season y reset mediante función programada
+- [x] Importación de archivos GPX/TCX y replay 3D de carreras
+- [x] Modo offline + sincronización diferida de carreras
+
 ### En desarrollo
-- [ ] Sistema de escudos protectores (consumibles)
-- [ ] Desafíos 1v1 entre amigos
-- [ ] Heatmap de zonas más disputadas
-- [ ] Rankings especializados (ritmo, distancia, etc.)
+- [ ] Heatmap de zonas más disputadas y hotspots de robos
+- [ ] Rankings especializados (ritmo, distancia, constancia, defensores)
+- [ ] Sistema de misiones dinámicas (POI diarios/semanales)
 
 ### Planificado
-- [ ] Sistema de temporadas con reset mensual
-- [ ] Clanes y territorios de equipo
-- [ ] Eventos especiales y territorios premium
-- [ ] Modo offline con sincronización
-- [ ] Notificaciones push nativas
-- [ ] Integración con wearables (Garmin, Strava)
-- [ ] Achievements más complejos y rareza
-- [ ] Replay 3D de carreras
+- [ ] Clanes/escuadras y territorios compartidos
+- [ ] Eventos especiales y territorios premium patrocinados
+- [ ] Notificaciones push nativas y campañas in-app
+- [ ] Integración con wearables (Garmin, Strava, Apple Watch) y auto-sync
+- [ ] Achievements con rareza y recompensas cosméticas
+- [ ] Herramientas de entrenamiento: ghost runs, planes de ritmo, coach IA
 
 ### Considerando
-- [ ] Marketplace de items y cosméticos
-- [ ] Sistema de energía/stamina
-- [ ] Batallas por territorios en tiempo real
-- [ ] Monetización (premium features, ads)
+- [ ] Marketplace de items/cosméticos y economía soft
+- [ ] Sistema de energía/stamina y power-ups temporales
+- [ ] Batallas en tiempo real / matchmaking en vivo
+- [ ] Modo espectador y streaming de conquistas
+- [ ] Contenido UGC: editor de rutas y retos comunitarios
 
 ---
 

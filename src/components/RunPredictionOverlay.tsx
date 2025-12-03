@@ -38,7 +38,7 @@ export const RunPredictionOverlay = ({
   };
 
   return (
-    <div className="absolute top-4 left-4 right-4 z-10 pointer-events-none">
+    <div className="absolute top-24 md:top-6 left-4 right-4 z-20 pointer-events-none">
       <Card className="p-4 bg-background/95 backdrop-blur-sm pointer-events-auto">
         <div className="space-y-3">
           {/* Estado de velocidad */}

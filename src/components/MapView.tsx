@@ -42,6 +42,26 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [showPois, setShowPois] = useState(false);
   const { user } = useAuth();
 
+  const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].lng;
+      const yi = polygon[i].lat;
+      const xj = polygon[j].lng;
+      const yj = polygon[j].lat;
+
+      const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+        (point.lng < ((xj - xi) * (point.lat - yi)) / Math.max(yj - yi, 1e-9) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  };
+
+  const isPolygonContained = (inner: Coordinate[], outer: Coordinate[]) => {
+    if (inner.length < 3 || outer.length < 3) return false;
+    return inner.every((point) => isPointInPolygon(point, outer));
+  };
+
   // Cargar token de Mapbox desde edge function
   useEffect(() => {
     const fetchMapboxToken = async () => {
@@ -434,11 +454,22 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     }
 
     if (territories.length > 0) {
-      // Filtrar territorios según el filtro seleccionado
-      const filteredTerritories = territories.filter((territory: Territory) => {
-        if (territoryFilter === 'mine') return territory.userId === user?.id;
-        if (territoryFilter === 'friends') return territory.userId && friendIds.has(territory.userId);
-        return true; // 'all'
+      // Filtrar territorios según el filtro seleccionado y evitar duplicar polígonos contenidos del mismo usuario
+      const filteredTerritories = territories.filter((territory: Territory, index: number) => {
+        if (territoryFilter === 'mine' && territory.userId !== user?.id) return false;
+        if (territoryFilter === 'friends' && (!territory.userId || !friendIds.has(territory.userId))) return false;
+
+        if (!territory.userId) return true;
+        const containsAnother = territories.some((other, otherIndex) => {
+          if (index === otherIndex) return false;
+          if (other.userId !== territory.userId) return false;
+          if (!other.coordinates?.length || !territory.coordinates?.length) return false;
+          if ((other.area || 0) < (territory.area || 0)) return false;
+          return isPolygonContained(territory.coordinates, other.coordinates);
+        });
+
+        if (containsAnother) return false;
+        return true;
       });
 
       const features = filteredTerritories.map((territory: Territory) => {

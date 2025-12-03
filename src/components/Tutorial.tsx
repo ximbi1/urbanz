@@ -12,7 +12,7 @@ interface TutorialProps {
 const tutorialSteps = [
   {
     title: '¡Bienvenido a URBANZ!',
-    description: 'La app que convierte tus carreras en una batalla por conquistar territorios. Aprende cómo funciona en solo unos pasos.',
+    description: 'Traza tus carreras y convierte la ciudad en tu tablero. Conquista, defiende y desafía a tus amigos mientras sumas puntos.',
     icon: Trophy,
     image: '🏃‍♂️',
   },
@@ -43,6 +43,34 @@ const tutorialSteps = [
     icon: Users,
     image: '🏆',
     highlight: 'Accede a las ligas desde el icono del trofeo',
+  },
+  {
+    title: 'Escudos y centro de defensa',
+    description: 'Compra escudos y aplícalos a tus territorios desde tu perfil. En el mapa verás un halo dorado en las zonas protegidas.',
+    icon: Target,
+    image: '🛡️',
+    highlight: 'Perfil → Centro de defensa',
+  },
+  {
+    title: 'Duelos 1v1',
+    description: 'Reta a tus amigos desde la sección “Amigos”. El progreso de distancia, puntos o territorios se actualiza automáticamente.',
+    icon: Users,
+    image: '⚔️',
+    highlight: 'Pestaña Amigos → Duelos activos',
+  },
+  {
+    title: 'Modo offline + sync',
+    description: 'Sin conexión, seguimos guardando tus carreras. Cuando vuelvas a estar online se sincronizan solas o desde el banner de estado.',
+    icon: HelpCircle,
+    image: '📶',
+    highlight: 'Mira el banner offline en la pantalla principal',
+  },
+  {
+    title: 'Importa y revive tus runs',
+    description: 'Sube archivos GPX/TCX desde el perfil y actívalos en 3D con el “Run Replay”. Perfecto para revivir conquistas o analizar rutas.',
+    icon: MapPin,
+    image: '🎬',
+    highlight: 'Perfil → Importar carrera',
   },
 ];
 
