@@ -1,4 +1,4 @@
-import { Trophy, User, Users, Target, Activity, BookOpen, Bell, Flame, Shield } from 'lucide-react';
+import { Trophy, User, Users, Target, Activity, Bell, Flame, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +9,6 @@ import { calculateLevel, getLevelTitle } from '@/utils/levelSystem';
 interface HeaderProps {
   onShowRanking: () => void;
   onShowProfile: () => void;
-  onShowTutorial: () => void;
   onShowFriends: () => void;
   onShowChallenges: () => void;
   onShowClans: () => void;
@@ -17,7 +16,7 @@ interface HeaderProps {
   onShowNotifications: () => void;
 }
 
-const Header = ({ onShowRanking, onShowProfile, onShowTutorial, onShowFriends, onShowChallenges, onShowClans, onShowFeed, onShowNotifications }: HeaderProps) => {
+const Header = ({ onShowRanking, onShowProfile, onShowFriends, onShowChallenges, onShowClans, onShowFeed, onShowNotifications }: HeaderProps) => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -135,9 +134,6 @@ const Header = ({ onShowRanking, onShowProfile, onShowTutorial, onShowFriends, o
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </Badge>
               )}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onShowTutorial} className="hover:bg-primary/20" title="Ver tutorial">
-              <BookOpen className="w-5 h-5" />
             </Button>
             <Button variant="ghost" size="icon" onClick={onShowFeed} className="hover:bg-primary/20" title="Feed de actividad">
               <Activity className="w-5 h-5" />
