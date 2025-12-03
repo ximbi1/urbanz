@@ -707,13 +707,13 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     if (!showParks && !showFountains && !showDistricts) return;
     const iconMap: Record<string, string> = {
       park: '🌳',
-      beach: '🏖️',
-      historic: '🏛️',
-      plaza: '⛲',
       fountain: '🚰',
       district: '🗺️',
     };
     mapPois.forEach(poi => {
+      if (poi.category !== 'park' && poi.category !== 'fountain' && poi.category !== 'district') {
+        return;
+      }
       if (poi.category === 'park' && !showParks) return;
       if (poi.category === 'fountain' && !showFountains) return;
       if (poi.category === 'district' && !showDistricts) return;
