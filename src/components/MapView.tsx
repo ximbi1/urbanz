@@ -400,9 +400,12 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
   useEffect(() => {
     const loadPois = async () => {
+      const categories: Array<MapPoi['category']> = ['park', 'fountain', 'district'];
       const { data, error } = await supabase
         .from('map_pois')
-        .select('*');
+        .select('*')
+        .in('category', categories)
+        .limit(5000);
       if (!error && data) {
         const mapped = (data as any[]).map((poi) => ({
           ...poi,

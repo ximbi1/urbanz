@@ -67,7 +67,7 @@ export interface MapChallenge {
 export interface MapPoi {
   id: string;
   name: string;
-  category: 'park' | 'beach' | 'historic' | 'plaza';
+  category: 'park' | 'fountain' | 'district' | 'beach' | 'historic' | 'plaza';
   coordinates: Coordinate[];
 }
 
