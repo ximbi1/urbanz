@@ -327,11 +327,20 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
       if (error) throw error;
       createdClanId = clan.id;
 
-      const { error: memberError } = await supabase
+      const { data: membershipRow, error: memberError } = await supabase
         .from('clan_members')
-        .insert({ clan_id: clan.id, user_id: user.id, role: 'leader' });
+        .insert({ clan_id: clan.id, user_id: user.id, role: 'leader' })
+        .select(`
+          id,
+          clan_id,
+          role,
+          contribution_points,
+          clan:clans (id, name, description, banner_color, emblem_url, total_points, territories_controlled, created_at)
+        `)
+        .single();
 
-      if (memberError) throw memberError;
+      if (memberError || !membershipRow) throw memberError;
+      setMembership(membershipRow as ClanMembership);
 
       await supabase
         .from('clan_feed')
@@ -344,7 +353,11 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
 
       toast.success('Clan creado correctamente');
       setCreateForm({ name: '', description: '', color: '#2563eb' });
-      await Promise.all([loadMembership(), loadTopClans()]);
+      await Promise.all([
+        loadClanMissions(clan.id),
+        loadClanFeed(clan.id),
+        loadTopClans(),
+      ]);
     } catch (error) {
       console.error('No se pudo crear el clan:', error);
       if (createdClanId) {
@@ -368,11 +381,20 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     }
     setJoinLoading(clanId);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('clan_members')
-        .insert({ clan_id: clanId, user_id: user.id, role: 'member' });
+        .insert({ clan_id: clanId, user_id: user.id, role: 'member' })
+        .select(`
+          id,
+          clan_id,
+          role,
+          contribution_points,
+          clan:clans (id, name, description, banner_color, emblem_url, total_points, territories_controlled, created_at)
+        `)
+        .single();
 
-      if (error) throw error;
+      if (error || !data) throw error;
+      setMembership(data as ClanMembership);
 
       await supabase
         .from('clan_feed')
@@ -384,7 +406,11 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
         });
 
       toast.success('¡Bienvenido al clan!');
-      await Promise.all([loadMembership(), loadTopClans()]);
+      await Promise.all([
+        loadClanMissions(clanId),
+        loadClanFeed(clanId),
+        loadTopClans(),
+      ]);
     } catch (error) {
       console.error('Error uniéndose al clan:', error);
       if ((error as any)?.code === '23505') {
