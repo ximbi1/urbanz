@@ -101,6 +101,40 @@ URBANZ fusiona tres elementos:
 
 ---
 
+## 📱 Integración con Capacitor (Node 18.x)
+
+Para empaquetar la PWA como apps nativas usamos **Capacitor 6**, compatible con Node 18.17 del entorno actual. Si actualizas Node ≥20 podrás saltar a Capacitor 7 sin cambios mayores.
+
+### 1. Setup inicial
+- `npx cap init URBANZ com.urbanz.app --web-dir dist`
+- `npm install -D @capacitor/cli@6 && npm install @capacitor/core@6`
+- Plataformas: `npm install @capacitor/ios@6 @capacitor/android@6` seguido de `npx cap add ios` y `npx cap add android`.
+- Cada build web (`npm run build`) debe ir seguido de `npx cap copy` (o `sync`) para volcar `dist/` en los proyectos nativos.
+
+### 2. Plugins instalados
+- `@capacitor/geolocation@6`, `@capacitor/push-notifications@6`, `@capacitor/haptics@6`
+- `@capacitor-community/keep-awake@5`
+- `@transistorsoft/capacitor-background-fetch@6` (último release compatible con Capacitor 6).
+
+### 3. Permisos nativos mínimos
+- **iOS (`ios/App/App/Info.plist`)**: agrega `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `UIBackgroundModes` con `location` y `fetch`. En `AppDelegate` habilita `locationManager.allowsBackgroundLocationUpdates = true`.
+- **Android (`android/app/src/main/AndroidManifest.xml`)**: añade `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`. Crea un `ForegroundService` (Capacitor template o plugin community) con notificación persistente para las carreras background.
+
+### 4. Hooks a adaptar
+- `useGeolocation`: detecta `Capacitor.isNativePlatform()` → usa `Geolocation.watchPosition`. En Android background delega al servicio foreground.
+- `usePushNotifications`: solicita permiso, registra token y listeners con `PushNotifications` sin romper el fallback web (mantén `navigator.geolocation`/Service Worker push).
+- `useRun`: al iniciar carrera nativa enciende `KeepAwake` + `Haptics` y llama al servicio foreground Android; libera recursos al finalizar.
+- Mantén los codepaths web activos para la versión browser/PWA.
+
+### 5. Flujo de desarrollo nativo
+- Lanza `npx cap sync` tras modificar plugins o `capacitor.config.ts`.
+- Usa `npx cap open ios` / `npx cap open android` para abrir Xcode/Android Studio y probar en simulador o dispositivo real.
+- Documenta en Supabase (cron) cómo usar `rebalance-shards` si habilitas el refresco background, y añade al README del proyecto nativo cómo activar el “modo explorador/liga social”.
+
+Con estos pasos puedes iterar sobre la app web y móvil en paralelo sin duplicar código.
+
+---
+
 ## 🎮 Mecánicas del Juego
 
 ### Conquistar Territorios
