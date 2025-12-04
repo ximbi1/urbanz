@@ -117,8 +117,8 @@ Para empaquetar la PWA como apps nativas usamos **Capacitor 6**, compatible con 
 - `@transistorsoft/capacitor-background-fetch@6` (último release compatible con Capacitor 6).
 
 ### 3. Permisos nativos mínimos
-- **iOS (`ios/App/App/Info.plist`)**: agrega `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `UIBackgroundModes` con `location` y `fetch`. En `AppDelegate` habilita `locationManager.allowsBackgroundLocationUpdates = true`.
-- **Android (`android/app/src/main/AndroidManifest.xml`)**: añade `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`, `ACTIVITY_RECOGNITION`. Crea un `ForegroundService` (Capacitor template o plugin community) con notificación persistente para las carreras background.
+- **iOS (`ios/App/App/Info.plist` + `AppDelegate.swift`)**: ya se declararon `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `UIBackgroundModes` y `locationManager.allowsBackgroundLocationUpdates = true`. Ajusta los textos si cambias el copy o las políticas de privacidad.
+- **Android (`android/app/src/main/AndroidManifest.xml`)**: permisos de ubicación/background, `POST_NOTIFICATIONS`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` y el servicio `RunTrackingService` están listos. Solo falta invocarlo desde JS con un plugin/bridge cuando arranque una carrera para mostrar la notificación persistente.
 
 ### 4. Hooks a adaptar
 - `useGeolocation`: detecta `Capacitor.isNativePlatform()` → usa `Geolocation.watchPosition`. En Android background delega al servicio foreground.

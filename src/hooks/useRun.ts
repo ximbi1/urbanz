@@ -1,4 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
+import { KeepAwake } from '@capacitor-community/keep-awake';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Coordinate } from '@/types/territory';
 import {
   calculatePathDistance,
@@ -28,7 +32,7 @@ export const useRun = () => {
   const [duration, setSuration] = useState(0);
   const [distance, setDistance] = useState(0);
   const [useGPS, setUseGPS] = useState(false);
-  const [watchId, setWatchId] = useState<number | null>(null);
+  const [watchId, setWatchId] = useState<string | number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [pausedTime, setPausedTime] = useState(0);
@@ -36,6 +40,53 @@ export const useRun = () => {
   const { user } = useAuth();
   const { checkAndUnlockAchievements } = useAchievements();
   const { settings: playerSettings } = usePlayerSettings();
+  const isNative = Capacitor.isNativePlatform();
+  const platform = Capacitor.getPlatform();
+  const isAndroid = platform === 'android';
+
+  const enableKeepAwake = useCallback(async () => {
+    if (!isNative) return;
+    try {
+      await KeepAwake.keepAwake();
+    } catch (error) {
+      console.warn('No se pudo activar KeepAwake', error);
+    }
+  }, [isNative]);
+
+  const allowSleep = useCallback(async () => {
+    if (!isNative) return;
+    try {
+      await KeepAwake.allowSleep();
+    } catch (error) {
+      console.warn('No se pudo desactivar KeepAwake', error);
+    }
+  }, [isNative]);
+
+  const triggerHaptic = useCallback(async (type: 'start' | 'pause' | 'resume' | 'stop') => {
+    if (!isNative) return;
+    try {
+      if (type === 'start' || type === 'resume') {
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+      } else if (type === 'pause') {
+        await Haptics.impact({ style: ImpactStyle.Medium });
+      } else if (type === 'stop') {
+        await Haptics.notification({ type: NotificationType.Success });
+      }
+    } catch (error) {
+      console.warn('Error al ejecutar haptics', error);
+    }
+  }, [isNative]);
+
+  const startForegroundService = useCallback(() => {
+    if (!isAndroid) return;
+    // TODO: Integrar servicio foreground nativo cuando el plugin esté disponible
+    console.debug('Foreground service placeholder: iniciar servicio foreground en Android');
+  }, [isAndroid]);
+
+  const stopForegroundService = useCallback(() => {
+    if (!isAndroid) return;
+    console.debug('Foreground service placeholder: detener servicio foreground en Android');
+  }, [isAndroid]);
 
   const updateActiveDuels = async (
     distanceValue: number,
@@ -88,6 +139,57 @@ export const useRun = () => {
     }
   };
 
+  const handleGPSPosition = useCallback((position: GeolocationPosition) => {
+    const accuracy = position.coords.accuracy;
+    if (accuracy && accuracy > 20) {
+      console.warn(`GPS accuracy too low: ${accuracy}m`);
+      return;
+    }
+
+    const newPoint: GPSPoint = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: accuracy ?? undefined,
+      timestamp: Date.now(),
+    };
+
+    setRunPath(prev => {
+      if (prev.length > 0) {
+        const lastPoint = prev[prev.length - 1];
+        const dist = calculatePathDistance([lastPoint, newPoint]);
+        if (dist < 5) return prev;
+      }
+
+      const updated = [...prev, newPoint];
+      if (prev.length > 0) {
+        setDistance(d => d + calculatePathDistance([prev[prev.length - 1], newPoint]));
+      }
+
+      if (updated.length >= 4 && isPolygonClosed(updated)) {
+        toast.success('¡Polígono cerrado! 🎯', {
+          description: 'Puedes conquistar este territorio'
+        });
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const clearGPSWatch = useCallback(async () => {
+    if (watchId === null) return;
+    try {
+      if (typeof watchId === 'string') {
+        await Geolocation.clearWatch({ id: watchId });
+      } else if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    } catch (error) {
+      console.warn('Error limpiando el watch de GPS', error);
+    } finally {
+      setWatchId(null);
+    }
+  }, [watchId]);
+
   // Calcular duración basada en timestamps reales
   useEffect(() => {
     let interval: number | undefined;
@@ -103,6 +205,12 @@ export const useRun = () => {
     };
   }, [isRunning, isPaused, startTime, pausedTime]);
 
+  useEffect(() => {
+    return () => {
+      clearGPSWatch();
+    };
+  }, [clearGPSWatch]);
+
   const startRun = useCallback((gpsMode: boolean = false) => {
     const now = Date.now();
     setIsRunning(true);
@@ -114,39 +222,32 @@ export const useRun = () => {
     setPausedTime(0);
     setLastPauseTime(null);
     setUseGPS(gpsMode);
+    enableKeepAwake();
+    triggerHaptic('start');
+    startForegroundService();
 
     if (gpsMode) {
-      if ('geolocation' in navigator) {
+      if (isNative) {
+        Geolocation.watchPosition({ enableHighAccuracy: true }, (position, error) => {
+          if (error) {
+            console.error('GPS Error (nativo):', error);
+            toast.error('Error obteniendo ubicación nativa');
+            return;
+          }
+          if (position) {
+            handleGPSPosition(position);
+          }
+        })
+          .then(id => setWatchId(id))
+          .catch(error => {
+            console.error('No se pudo iniciar el GPS nativo', error);
+            toast.error('No se pudo iniciar el GPS nativo');
+            setUseGPS(false);
+          });
+      } else if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
         const id = navigator.geolocation.watchPosition(
           (position) => {
-            // Filtrar puntos por precisión GPS
-            const accuracy = position.coords.accuracy;
-            if (accuracy > 20) {
-              console.warn(`GPS accuracy too low: ${accuracy}m`);
-              return;
-            }
-
-            const newPoint: GPSPoint = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-              accuracy: accuracy,
-              timestamp: Date.now(),
-            };
-
-            setRunPath(prev => {
-              // No agregar puntos duplicados muy cercanos
-              if (prev.length > 0) {
-                const lastPoint = prev[prev.length - 1];
-                const dist = calculatePathDistance([lastPoint, newPoint]);
-                if (dist < 5) return prev; // Ignorar puntos < 5m
-              }
-
-              const updated = [...prev, newPoint];
-              if (prev.length > 0) {
-                setDistance(d => d + calculatePathDistance([prev[prev.length - 1], newPoint]));
-              }
-              return updated;
-            });
+            handleGPSPosition(position);
           },
           (error) => {
             console.error('GPS Error:', error);
@@ -166,13 +267,14 @@ export const useRun = () => {
     }
 
     toast.success('¡Carrera iniciada!');
-  }, []);
+  }, [enableKeepAwake, handleGPSPosition, isNative, startForegroundService, triggerHaptic]);
 
   const pauseRun = useCallback(() => {
     setIsPaused(true);
     setLastPauseTime(Date.now());
+    triggerHaptic('pause');
     toast.info('Carrera pausada');
-  }, []);
+  }, [triggerHaptic]);
 
   const resumeRun = useCallback(() => {
     if (lastPauseTime) {
@@ -181,8 +283,9 @@ export const useRun = () => {
       setLastPauseTime(null);
     }
     setIsPaused(false);
+    triggerHaptic('resume');
     toast.success('Carrera reanudada');
-  }, [lastPauseTime]);
+  }, [lastPauseTime, triggerHaptic]);
 
   const addPoint = useCallback((point: Coordinate) => {
     if (!isRunning || isPaused || useGPS) return;
@@ -206,10 +309,10 @@ export const useRun = () => {
   }, [isRunning, isPaused, useGPS]);
 
   const stopRun = useCallback(async () => {
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      setWatchId(null);
-    }
+    await clearGPSWatch();
+    allowSleep();
+    triggerHaptic('stop');
+    stopForegroundService();
 
     if (!user) {
       toast.error('Debes iniciar sesión para guardar carreras');
@@ -527,7 +630,7 @@ export const useRun = () => {
         timestamp: Date.now(),
       },
     };
-  }, [runPath, duration, watchId, user, useGPS]);
+  }, [allowSleep, checkAndUnlockAchievements, clearGPSWatch, duration, playerSettings, runPath, stopForegroundService, triggerHaptic, updateActiveDuels, user, useGPS]);
 
   return {
     isRunning,

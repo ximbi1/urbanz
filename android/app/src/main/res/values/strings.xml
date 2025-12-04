@@ -4,4 +4,7 @@
     <string name="title_activity_main">URBANZ</string>
     <string name="package_name">com.urbanz.app</string>
     <string name="custom_url_scheme">com.urbanz.app</string>
+    <string name="notification_tracking_title">URBANZ corriendo</string>
+    <string name="notification_tracking_description">Tu carrera sigue activa en segundo plano.</string>
+    <string name="notification_tracking_channel">Seguimiento de carreras</string>
 </resources>

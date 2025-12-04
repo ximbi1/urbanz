@@ -45,5 +45,18 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>URBANZ usa tu ubicación para registrar las carreras y dibujar los territorios.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Necesitamos tu ubicación incluso en segundo plano para seguir la carrera y proteger tus territorios.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>URBANZ necesita acceso continuo a la ubicación durante la carrera.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Usamos los sensores de movimiento para detectar actividad física durante la carrera.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>
