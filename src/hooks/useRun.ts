@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useAchievements } from './useAchievements';
 import { usePlayerSettings } from '@/hooks/usePlayerSettings';
+import { startRunTrackingService, stopRunTrackingService } from '@/lib/runTracking';
 
 export const useRun = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -79,13 +80,12 @@ export const useRun = () => {
 
   const startForegroundService = useCallback(() => {
     if (!isAndroid) return;
-    // TODO: Integrar servicio foreground nativo cuando el plugin esté disponible
-    console.debug('Foreground service placeholder: iniciar servicio foreground en Android');
+    startRunTrackingService();
   }, [isAndroid]);
 
   const stopForegroundService = useCallback(() => {
     if (!isAndroid) return;
-    console.debug('Foreground service placeholder: detener servicio foreground en Android');
+    stopRunTrackingService();
   }, [isAndroid]);
 
   const updateActiveDuels = async (
