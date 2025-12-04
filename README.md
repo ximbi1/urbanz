@@ -118,7 +118,7 @@ Para empaquetar la PWA como apps nativas usamos **Capacitor 6**, compatible con 
 
 ### 3. Permisos nativos mínimos
 - **iOS (`ios/App/App/Info.plist` + `AppDelegate.swift`)**: ya se declararon `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `UIBackgroundModes` y `locationManager.allowsBackgroundLocationUpdates = true`. Ajusta los textos si cambias el copy o las políticas de privacidad.
-- **Android (`android/app/src/main/AndroidManifest.xml`)**: permisos de ubicación/background, `POST_NOTIFICATIONS`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` y el servicio `RunTrackingService` están listos. Solo falta invocarlo desde JS con un plugin/bridge cuando arranque una carrera para mostrar la notificación persistente.
+- **Android (`android/app/src/main/AndroidManifest.xml`)**: permisos de ubicación/background, `POST_NOTIFICATIONS`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` y el servicio `RunTrackingService` están listos. El plugin `RunTrackingPlugin` expone `startService/stopService` (envueltos en `src/lib/runTracking.ts`) y `useRun` ya lo invoca cuando empieza/termina una carrera real.
 
 ### 4. Hooks a adaptar
 - `useGeolocation`: detecta `Capacitor.isNativePlatform()` → usa `Geolocation.watchPosition`. En Android background delega al servicio foreground.
