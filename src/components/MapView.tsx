@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Locate, Users, User, Globe, X, SlidersHorizontal } from 'lucide-react';
 import { usePlayerSettings } from '@/hooks/usePlayerSettings';
+import { ContentSkeleton } from './ui/content-skeleton';
 
 interface MapViewProps {
   runPath: Coordinate[];
@@ -1169,10 +1170,8 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
   if (!mapboxToken) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-muted-foreground">Cargando mapa...</p>
-        </div>
+      <div className="w-full h-full flex items-center justify-center bg-background p-4">
+        <ContentSkeleton type="map" />
       </div>
     );
   }

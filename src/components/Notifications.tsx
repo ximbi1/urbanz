@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Bell, Check, UserPlus, Trophy, MapPin } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -180,14 +182,9 @@ const Notifications = ({ onClose, isMobileFullPage = false }: NotificationsProps
           </div>
 
           {loading ? (
-            <div className="text-center text-muted-foreground py-8">
-              Cargando notificaciones...
-            </div>
+            <ContentSkeleton type="notifications" count={5} />
           ) : notifications.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
-              <Bell className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No tienes notificaciones</p>
-            </div>
+            <EmptyState type="notifications" />
           ) : (
             <div className="space-y-3">
               {notifications.map((notification) => {

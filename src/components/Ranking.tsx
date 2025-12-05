@@ -1,4 +1,6 @@
 import { X, Trophy, Medal, MapPin, Route } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -175,16 +177,16 @@ const Ranking = ({ onClose }: RankingProps) => {
 
           <TabsContent value={sortBy} className="space-y-2 mt-4 overflow-auto flex-1">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Cargando ranking...
-              </div>
+              <ContentSkeleton type="ranking" count={8} />
             ) : sortedRankings.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {viewMode === 'friends' 
-                  ? 'No tienes amigos aceptados aún'
-                  : 'No hay datos disponibles'
+              <EmptyState 
+                type={viewMode === 'friends' ? 'friends' : 'achievements'}
+                title={viewMode === 'friends' ? 'Sin amigos todavía' : 'Sin datos'}
+                description={viewMode === 'friends' 
+                  ? 'Añade amigos para ver el ranking social'
+                  : 'No hay datos de ranking disponibles'
                 }
-              </div>
+              />
             ) : (
               sortedRankings.map((entry, index) => (
                 <div

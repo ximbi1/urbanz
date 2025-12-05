@@ -105,7 +105,15 @@ const Index = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-500">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-ping" />
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <span className="text-2xl font-display font-bold text-primary-foreground">U</span>
+            </div>
+          </div>
+          <p className="text-muted-foreground animate-pulse">Cargando URBANZ...</p>
+        </div>
       </div>
     );
   }

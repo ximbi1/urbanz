@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, MapPin, Zap, TrendingUp, Activity, Clock, PlayCircle, Trophy, Handshake, ThumbsUp, Sword, Sparkles, Megaphone, Users } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -652,17 +654,13 @@ const ActivityFeed = ({ onClose, isMobileFullPage = false }: ActivityFeedProps) 
   const renderActivities = () => (
     <>
       {loading && combinedFeed.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <div className="animate-pulse">Cargando actividades...</div>
-        </div>
+        <ContentSkeleton type="runs" count={4} />
       ) : combinedFeed.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="font-semibold">No hay actividad reciente</p>
-          <p className="text-sm mt-1">
-            Las carreras de amigos, corredores cercanos y eventos de tu clan aparecerán aquí
-          </p>
-        </div>
+        <EmptyState 
+          type="friends"
+          title="Sin actividad reciente"
+          description="Las carreras de amigos y eventos de tu clan aparecerán aquí"
+        />
       ) : (
         <div className="space-y-3">
           {combinedFeed.map(item =>

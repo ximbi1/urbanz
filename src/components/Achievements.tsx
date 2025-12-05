@@ -1,4 +1,6 @@
 import { X } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -121,13 +123,9 @@ const Achievements = ({ onClose }: AchievementsProps) => {
 
           <TabsContent value={filter} className="space-y-3 mt-4 overflow-y-auto flex-1 pr-2">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Cargando logros...
-              </div>
+              <ContentSkeleton type="achievements" count={5} />
             ) : filteredAchievements.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No hay logros disponibles
-              </div>
+              <EmptyState type="achievements" className="py-6" />
             ) : (
               filteredAchievements.map((achievement) => {
                 const unlocked = isUnlocked(achievement.id);

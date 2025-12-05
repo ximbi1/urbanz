@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, MapPin, Trophy, Calendar, Filter, Search } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -213,13 +215,17 @@ export const RunHistory = ({ onClose, userId }: RunHistoryProps) => {
         {/* Lista de carreras */}
         <div className="flex-1 overflow-y-auto space-y-3">
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Cargando carreras...
-            </div>
+            <ContentSkeleton type="runs" count={4} />
           ) : filteredRuns.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No se encontraron carreras
-            </div>
+            <EmptyState 
+              type="runs" 
+              title={searchTerm || filterPeriod !== 'all' || filterDistance !== 'all' 
+                ? 'No se encontraron carreras' 
+                : undefined}
+              description={searchTerm || filterPeriod !== 'all' || filterDistance !== 'all'
+                ? 'Prueba con otros filtros de búsqueda'
+                : undefined}
+            />
           ) : (
             filteredRuns.map((run) => (
               <Card

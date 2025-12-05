@@ -1,4 +1,5 @@
 import { X, Trophy, MapPin, Route, Award, User, TrendingUp, History, ShieldHalf, ShieldCheck, Loader2 } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -264,9 +265,7 @@ const UserProfile = ({ userId, onClose }: UserProfileProps) => {
     return (
       <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl bg-card border-glow p-6">
-          <div className="text-center py-8 text-muted-foreground">
-            Cargando perfil...
-          </div>
+          <ContentSkeleton type="profile" />
         </Card>
       </div>
     );

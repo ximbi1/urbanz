@@ -1,4 +1,6 @@
 import { X, Trophy, Medal, MapPin, Route, Crown, Gem, Award } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -280,14 +282,14 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
 
           <div className="space-y-2 overflow-auto flex-1">
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Cargando ligas...
-              </div>
+              <ContentSkeleton type="ranking" count={6} />
             ) : viewMode === 'my-league' ? (
               myLeagueRankings.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay competidores en tu liga
-                </div>
+                <EmptyState 
+                  type="achievements"
+                  title="Sin competidores"
+                  description="No hay otros corredores en tu liga todavía"
+                />
               ) : (
                 myLeagueRankings.map((entry, index) => (
                   <div
@@ -414,14 +416,14 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
 
         <div className="space-y-2 overflow-auto flex-1">
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Cargando ligas...
-            </div>
+            <ContentSkeleton type="ranking" count={6} />
           ) : viewMode === 'my-league' ? (
             myLeagueRankings.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No hay competidores en tu liga
-              </div>
+              <EmptyState 
+                type="achievements"
+                title="Sin competidores"
+                description="No hay otros corredores en tu liga todavía"
+              />
             ) : (
               myLeagueRankings.map((entry, index) => (
                 <div

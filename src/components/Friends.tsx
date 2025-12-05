@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, UserPlus, Check, XIcon, Users, Search, Swords, Loader2, Shield } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -368,13 +370,14 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
         </Card>
       )}
       <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-        {duelsLoading ? (
-          <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Cargando duelos...
-          </div>
+      {duelsLoading ? (
+          <ContentSkeleton type="friends" count={2} />
         ) : duels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no tienes duelos activos.</p>
+          <EmptyState 
+            type="duels" 
+            className="py-6"
+            description="Añade amigos y reta a duelos 1v1."
+          />
         ) : (
           duels.map((duel) => {
             const challenger = duel.challenger_id === user?.id ? 'Tú' : (friendNameMap.get(duel.challenger_id) || 'Rival');

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Trophy, Target, CheckCircle2, Clock, Award, Trees, Droplets, Map } from 'lucide-react';
+import { ContentSkeleton } from './ui/content-skeleton';
+import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -332,16 +334,17 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Target className="w-5 h-5 text-primary" />
-        <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
+      <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
       </div>
       {missionsLoading ? (
-        <Card className="p-4 bg-muted/30 border-border text-sm text-muted-foreground">
-          Cargando misiones...
-        </Card>
+        <ContentSkeleton type="challenges" count={2} />
       ) : missions.length === 0 ? (
-        <Card className="p-4 bg-muted/20 border-dashed border-border text-sm text-muted-foreground">
-          No hay misiones activas por ahora.
-        </Card>
+        <EmptyState 
+          type="challenges" 
+          className="py-6"
+          title="Sin misiones activas"
+          description="Vuelve pronto para nuevas misiones"
+        />
       ) : (
         <div className="space-y-3">
           {missions.map((mission) => {
@@ -553,14 +556,9 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
 
           {/* Challenges content */}
           {loading ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Cargando desafíos...</p>
-            </div>
+            <ContentSkeleton type="challenges" count={3} />
           ) : challenges.length === 0 ? (
-            <Card className="p-8 text-center">
-              <Target className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No hay desafíos disponibles en este momento</p>
-            </Card>
+            <EmptyState type="challenges" />
           ) : (
             <div className="space-y-4">
               {challenges.map((challenge) => renderChallengeCard(challenge, 'mobile'))}
@@ -602,14 +600,9 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
 
         {/* Lista de desafíos */}
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <div className="animate-pulse">Cargando desafíos...</div>
-          </div>
+          <ContentSkeleton type="challenges" count={3} />
         ) : challenges.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Target className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No hay desafíos activos</p>
-          </div>
+          <EmptyState type="challenges" />
         ) : (
           <div className="space-y-4">
             {challenges.map((challenge) => renderChallengeCard(challenge, 'desktop'))}
