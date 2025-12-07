@@ -214,10 +214,6 @@ const Index = () => {
                 setActiveSection('home');
                 setShowImport(true);
               }}
-              onHistoryClick={() => {
-                setActiveSection('activity');
-                setActivityTab('history');
-              }}
             />
           </div>
         );
@@ -237,12 +233,6 @@ const Index = () => {
       )}
 
       <Header
-        onShowRanking={() => { setActiveSection('compete'); setCompeteTab('leagues'); }}
-        onShowProfile={() => setActiveSection('you')}
-        onShowFriends={() => { setActiveSection('community'); setCommunityTab('friends'); }}
-        onShowChallenges={() => { setActiveSection('compete'); setCompeteTab('challenges'); }}
-        onShowClans={() => { setActiveSection('community'); setCommunityTab('clans'); }}
-        onShowFeed={() => { setActiveSection('activity'); setActivityTab('feed'); }}
         onShowNotifications={() => setActiveSection('you')}
       />
 
@@ -326,10 +316,6 @@ const Index = () => {
             onImportClick={() => {
               setActiveSection('home');
               setShowImport(true);
-            }}
-            onHistoryClick={() => {
-              setActiveSection('activity');
-              setActivityTab('history');
             }}
           />
         )}
