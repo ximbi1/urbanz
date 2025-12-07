@@ -6,49 +6,54 @@
 
 @layer base {
   :root {
-    --background: 220 20% 8%;
-    --foreground: 210 20% 98%;
+    /* Refined dark theme - more sophisticated, less harsh */
+    --background: 225 25% 6%;
+    --foreground: 210 20% 95%;
     
-    --card: 220 18% 12%;
-    --card-foreground: 210 20% 98%;
+    --card: 225 20% 10%;
+    --card-foreground: 210 20% 95%;
     
-    --popover: 220 18% 12%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 225 20% 10%;
+    --popover-foreground: 210 20% 95%;
     
-    --primary: 280 80% 60%;
+    /* Softer purple - less saturated, more elegant */
+    --primary: 270 65% 58%;
     --primary-foreground: 210 20% 98%;
     
-    --secondary: 180 60% 50%;
-    --secondary-foreground: 220 20% 8%;
+    /* Cyan accent - refined */
+    --secondary: 185 55% 48%;
+    --secondary-foreground: 225 25% 6%;
     
-    --muted: 220 15% 20%;
-    --muted-foreground: 210 10% 60%;
+    --muted: 225 18% 16%;
+    --muted-foreground: 220 15% 55%;
     
-    --accent: 320 70% 55%;
+    /* Accent pink - softer */
+    --accent: 330 55% 55%;
     --accent-foreground: 210 20% 98%;
     
-    --destructive: 0 70% 55%;
+    --destructive: 0 65% 50%;
     --destructive-foreground: 210 20% 98%;
     
-    --border: 220 15% 25%;
-    --input: 220 15% 25%;
-    --ring: 280 80% 60%;
+    /* Softer borders */
+    --border: 225 15% 18%;
+    --input: 225 15% 18%;
+    --ring: 270 65% 58%;
     
-    --radius: 0.75rem;
+    --radius: 0.625rem;
     
-    --success: 140 60% 50%;
-    --warning: 40 90% 60%;
-    --territory-owned: 280 70% 55%;
-    --territory-other: 200 60% 50%;
+    --success: 150 55% 45%;
+    --warning: 45 85% 55%;
+    --territory-owned: 270 60% 55%;
+    --territory-other: 200 55% 50%;
     
-    --sidebar-background: 220 18% 12%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 280 80% 60%;
+    --sidebar-background: 225 20% 10%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 270 65% 58%;
     --sidebar-primary-foreground: 210 20% 98%;
-    --sidebar-accent: 220 15% 20%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 15% 25%;
-    --sidebar-ring: 280 80% 60%;
+    --sidebar-accent: 225 18% 16%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 225 15% 18%;
+    --sidebar-ring: 270 65% 58%;
   }
 }
 
@@ -87,12 +92,19 @@
     font-family: 'Inter', sans-serif;
   }
   
+  /* Refined glow effects - more subtle */
   .glow-primary {
-    text-shadow: 0 0 20px hsl(var(--primary) / 0.5);
+    text-shadow: 0 0 12px hsl(var(--primary) / 0.35);
   }
   
   .border-glow {
-    box-shadow: 0 0 15px hsl(var(--primary) / 0.3);
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.15);
+  }
+
+  /* Subtle card elevation */
+  .card-elevated {
+    box-shadow: 0 4px 20px -4px hsl(var(--background) / 0.5),
+                0 0 0 1px hsl(var(--border) / 0.5);
   }
 
   .safe-area-bottom {

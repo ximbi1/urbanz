@@ -1,94 +1,43 @@
-import { Home, Target, Users, Activity, Trophy, Shield } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Home, Activity, Trophy, Users, User } from 'lucide-react';
+
+export type ActiveSection = 'home' | 'activity' | 'compete' | 'community' | 'you';
 
 interface BottomNavProps {
-  activeSection: 'home' | 'challenges' | 'friends' | 'feed' | 'leagues' | 'clans';
-  onShowHome: () => void;
-  onShowChallenges: () => void;
-  onShowFriends: () => void;
-  onShowFeed: () => void;
-  onShowRanking: () => void;
-  onShowClans: () => void;
+  activeSection: ActiveSection;
+  onNavigate: (section: ActiveSection) => void;
 }
 
-const BottomNav = ({ 
-  activeSection,
-  onShowHome, 
-  onShowChallenges, 
-  onShowFriends, 
-  onShowFeed, 
-  onShowRanking,
-  onShowClans
-}: BottomNavProps) => {
+const navItems: { id: ActiveSection; icon: typeof Home; label: string }[] = [
+  { id: 'home', icon: Home, label: 'Inicio' },
+  { id: 'activity', icon: Activity, label: 'Actividad' },
+  { id: 'compete', icon: Trophy, label: 'Competir' },
+  { id: 'community', icon: Users, label: 'Social' },
+  { id: 'you', icon: User, label: 'Perfil' },
+];
+
+const BottomNav = ({ activeSection, onNavigate }: BottomNavProps) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t border-border safe-area-bottom">
-      <div className="flex items-center justify-around px-1 py-2 max-w-screen-sm mx-auto">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'home' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowHome}
-        >
-          <Home className="h-5 w-5" />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'leagues' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowRanking}
-        >
-          <Trophy className="h-5 w-5" />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'challenges' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowChallenges}
-        >
-          <Target className="h-5 w-5" />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'clans' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowClans}
-        >
-          <Shield className="h-5 w-5" />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'friends' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowFriends}
-        >
-          <Users className="h-5 w-5" />
-        </Button>
-
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`flex-col h-12 w-12 hover:bg-primary/20 transition-colors ${
-            activeSection === 'feed' ? 'text-primary bg-primary/10' : ''
-          }`}
-          onClick={onShowFeed}
-        >
-          <Activity className="h-5 w-5" />
-        </Button>
-
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-t border-border/50 safe-area-bottom">
+      <div className="flex items-center justify-around px-2 py-1.5 max-w-screen-sm mx-auto">
+        {navItems.map(({ id, icon: Icon, label }) => {
+          const isActive = activeSection === id;
+          return (
+            <button
+              key={id}
+              onClick={() => onNavigate(id)}
+              className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-lg transition-all duration-200 min-w-[60px] ${
+                isActive
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+              }`}
+            >
+              <Icon className={`h-5 w-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
+              <span className={`text-[10px] font-medium transition-colors ${isActive ? 'text-primary' : ''}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

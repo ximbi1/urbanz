@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import BottomNav from '@/components/BottomNav';
+import BottomNav, { ActiveSection } from '@/components/BottomNav';
+import SubNavTabs from '@/components/SubNavTabs';
 import MapView from '@/components/MapView';
 import RunControls from '@/components/RunControls';
 import Leagues from '@/components/Leagues';
@@ -26,14 +27,30 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Clans from '@/components/Clans';
 
+const activityTabs = [
+  { id: 'feed', label: 'Feed' },
+  { id: 'history', label: 'Historial' },
+];
+
+const competeTabs = [
+  { id: 'leagues', label: 'Ligas' },
+  { id: 'challenges', label: 'Retos' },
+];
+
+const communityTabs = [
+  { id: 'friends', label: 'Amigos' },
+  { id: 'clans', label: 'Clanes' },
+];
+
 const Index = () => {
   const { user, loading } = useAuth();
-  const [activeSection, setActiveSection] = useState<'home' | 'challenges' | 'friends' | 'feed' | 'notifications' | 'profile' | 'leagues' | 'clans'>('home');
-  const [showLeagues, setShowLeagues] = useState(false);
+  const [activeSection, setActiveSection] = useState<ActiveSection>('home');
+  const [activityTab, setActivityTab] = useState('feed');
+  const [competeTab, setCompeteTab] = useState('leagues');
+  const [communityTab, setCommunityTab] = useState('friends');
   const [showSummary, setShowSummary] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [summaryData, setSummaryData] = useState<any>(null);
   const [viewUserProfileId, setViewUserProfileId] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(typeof navigator !== 'undefined' ? !navigator.onLine : false);
@@ -63,7 +80,6 @@ const Index = () => {
     stopTracking,
   } = useGeolocation();
 
-  // Iniciar tracking cuando se conceden permisos
   useEffect(() => {
     if (permissionGranted) {
       startTracking();
@@ -122,56 +138,14 @@ const Index = () => {
     return <Auth />;
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Dialog de permisos GPS */}
-      {!permissionGranted && (
-        <GPSPermissionDialog
-          onPermissionGranted={requestPermission}
-          onPermissionDenied={() => {}}
-        />
-      )}
+  const handleNavigate = (section: ActiveSection) => {
+    setActiveSection(section);
+  };
 
-      <Header
-        onShowRanking={() => setShowLeagues(true)}
-        onShowProfile={() => setActiveSection('profile')}
-        onShowFriends={() => setActiveSection('friends')}
-        onShowChallenges={() => setActiveSection('challenges')}
-        onShowClans={() => setActiveSection('clans')}
-        onShowFeed={() => setActiveSection('feed')}
-        onShowNotifications={() => setActiveSection('notifications')}
-      />
-
-      {(isOffline || pendingRunsCount > 0) && (
-        <div className="px-4 mt-2">
-          <Card className="p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-muted/20 border-dashed border-border">
-            <div>
-              <p className="text-sm font-semibold flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${isOffline ? 'bg-amber-400 animate-pulse' : 'bg-primary'}`} />
-                {isOffline ? 'Modo offline activo' : 'Carreras pendientes de sincronizar'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isOffline
-                  ? 'Seguiremos guardando tus carreras y las subiremos cuando recuperes conexión.'
-                  : `Tienes ${pendingRunsCount} carrera${pendingRunsCount === 1 ? '' : 's'} esperando sincronización.`}
-              </p>
-            </div>
-            {pendingRunsCount > 0 && (
-              <Button
-                size="sm"
-                onClick={syncRuns}
-                disabled={isOffline || isOfflineSyncing}
-              >
-                {isOfflineSyncing ? 'Sincronizando...' : 'Sincronizar ahora'}
-              </Button>
-            )}
-          </Card>
-        </div>
-      )}
-
-      {/* Mobile: Full page sections */}
-      <div className="md:hidden">
-        {activeSection === 'home' && (
+  const renderMobileContent = () => {
+    switch (activeSection) {
+      case 'home':
+        return (
           <main className="pt-16 pb-20 h-screen relative">
             <MapView
               runPath={runPath}
@@ -186,37 +160,52 @@ const Index = () => {
               isRunning={isRunning}
             />
           </main>
-        )}
-        {activeSection === 'challenges' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Challenges onClose={() => setActiveSection('home')} isMobileFullPage />
+        );
+      
+      case 'activity':
+        return (
+          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
+            <SubNavTabs tabs={activityTabs} activeTab={activityTab} onTabChange={setActivityTab} />
+            {activityTab === 'feed' ? (
+              <ActivityFeed onClose={() => setActiveSection('home')} isMobileFullPage />
+            ) : (
+              <div className="px-4">
+                <RunHistory onClose={() => setActivityTab('feed')} />
+              </div>
+            )}
           </div>
-        )}
-        {activeSection === 'friends' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Friends 
-              onClose={() => setActiveSection('home')} 
-              isMobileFullPage 
-              onViewUserProfile={(userId) => setViewUserProfileId(userId)}
-            />
+        );
+      
+      case 'compete':
+        return (
+          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
+            <SubNavTabs tabs={competeTabs} activeTab={competeTab} onTabChange={setCompeteTab} />
+            {competeTab === 'leagues' ? (
+              <Leagues onClose={() => setActiveSection('home')} isMobileFullPage />
+            ) : (
+              <Challenges onClose={() => setActiveSection('home')} isMobileFullPage />
+            )}
           </div>
-        )}
-        {activeSection === 'clans' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Clans onClose={() => setActiveSection('home')} isMobileFullPage />
+        );
+      
+      case 'community':
+        return (
+          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
+            <SubNavTabs tabs={communityTabs} activeTab={communityTab} onTabChange={setCommunityTab} />
+            {communityTab === 'friends' ? (
+              <Friends 
+                onClose={() => setActiveSection('home')} 
+                isMobileFullPage 
+                onViewUserProfile={(userId) => setViewUserProfileId(userId)}
+              />
+            ) : (
+              <Clans onClose={() => setActiveSection('home')} isMobileFullPage />
+            )}
           </div>
-        )}
-        {activeSection === 'feed' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <ActivityFeed onClose={() => setActiveSection('home')} isMobileFullPage />
-          </div>
-        )}
-        {activeSection === 'notifications' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Notifications onClose={() => setActiveSection('home')} isMobileFullPage />
-          </div>
-        )}
-        {activeSection === 'profile' && (
+        );
+      
+      case 'you':
+        return (
           <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
             <Profile 
               onClose={() => setActiveSection('home')} 
@@ -226,20 +215,71 @@ const Index = () => {
                 setShowImport(true);
               }}
               onHistoryClick={() => {
-                setActiveSection('home');
-                setShowHistory(true);
+                setActiveSection('activity');
+                setActivityTab('history');
               }}
             />
           </div>
-        )}
-        {activeSection === 'leagues' && (
-          <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Leagues onClose={() => setActiveSection('home')} isMobileFullPage />
-          </div>
-        )}
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {!permissionGranted && (
+        <GPSPermissionDialog
+          onPermissionGranted={requestPermission}
+          onPermissionDenied={() => {}}
+        />
+      )}
+
+      <Header
+        onShowRanking={() => { setActiveSection('compete'); setCompeteTab('leagues'); }}
+        onShowProfile={() => setActiveSection('you')}
+        onShowFriends={() => { setActiveSection('community'); setCommunityTab('friends'); }}
+        onShowChallenges={() => { setActiveSection('compete'); setCompeteTab('challenges'); }}
+        onShowClans={() => { setActiveSection('community'); setCommunityTab('clans'); }}
+        onShowFeed={() => { setActiveSection('activity'); setActivityTab('feed'); }}
+        onShowNotifications={() => setActiveSection('you')}
+      />
+
+      {(isOffline || pendingRunsCount > 0) && (
+        <div className="px-4 mt-2 fixed top-16 left-0 right-0 z-40">
+          <Card className="p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-muted/40 border-dashed border-border/50 backdrop-blur-sm">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${isOffline ? 'bg-warning animate-pulse' : 'bg-primary'}`} />
+                {isOffline ? 'Modo offline activo' : 'Carreras pendientes'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isOffline
+                  ? 'Tus carreras se sincronizarán al recuperar conexión.'
+                  : `${pendingRunsCount} carrera${pendingRunsCount === 1 ? '' : 's'} pendiente${pendingRunsCount === 1 ? '' : 's'}.`}
+              </p>
+            </div>
+            {pendingRunsCount > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={syncRuns}
+                disabled={isOffline || isOfflineSyncing}
+              >
+                {isOfflineSyncing ? 'Sincronizando...' : 'Sincronizar'}
+              </Button>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Mobile: Full page sections */}
+      <div className="md:hidden">
+        {renderMobileContent()}
       </div>
 
-      {/* Desktop: Keep modal behavior */}
+      {/* Desktop: Keep existing behavior */}
       <div className="hidden md:block">
         <main className="pt-16 h-screen relative">
           <MapView
@@ -257,17 +297,9 @@ const Index = () => {
         </main>
       </div>
 
-      <BottomNav
-        activeSection={activeSection as 'home' | 'challenges' | 'friends' | 'feed' | 'leagues' | 'clans'}
-        onShowHome={() => setActiveSection('home')}
-        onShowChallenges={() => setActiveSection('challenges')}
-        onShowFriends={() => setActiveSection('friends')}
-        onShowFeed={() => setActiveSection('feed')}
-        onShowRanking={() => setActiveSection('leagues')}
-        onShowClans={() => setActiveSection('clans')}
-      />
+      <BottomNav activeSection={activeSection} onNavigate={handleNavigate} />
 
-      {activeSection === 'home' && !showSummary && !showHistory && (
+      {activeSection === 'home' && !showSummary && (
         <RunControls
           isRunning={isRunning || isSaving}
           isPaused={isPaused}
@@ -282,15 +314,13 @@ const Index = () => {
       )}
 
       {/* Desktop modals */}
-      {showLeagues && <Leagues onClose={() => setShowLeagues(false)} />}
       {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} autoShow={false} />}
-      {activeSection === 'home' && !showLeagues && !showSummary && !showTutorial && (
+      {activeSection === 'home' && !showSummary && !showTutorial && (
         <Tutorial onClose={() => setShowTutorial(false)} autoShow={true} />
       )}
       
-      {/* Desktop: Show modals for sections */}
       <div className="hidden md:block">
-        {activeSection === 'profile' && (
+        {activeSection === 'you' && (
           <Profile 
             onClose={() => setActiveSection('home')}
             onImportClick={() => {
@@ -298,21 +328,29 @@ const Index = () => {
               setShowImport(true);
             }}
             onHistoryClick={() => {
-              setActiveSection('home');
-              setShowHistory(true);
+              setActiveSection('activity');
+              setActivityTab('history');
             }}
           />
         )}
-        {activeSection === 'friends' && (
+        {activeSection === 'community' && communityTab === 'friends' && (
           <Friends 
             onClose={() => setActiveSection('home')} 
             onViewUserProfile={(userId) => setViewUserProfileId(userId)}
           />
         )}
-        {activeSection === 'challenges' && <Challenges onClose={() => setActiveSection('home')} />}
-        {activeSection === 'feed' && <ActivityFeed onClose={() => setActiveSection('home')} />}
-        {activeSection === 'notifications' && <Notifications onClose={() => setActiveSection('home')} />}
-        {activeSection === 'clans' && <Clans onClose={() => setActiveSection('home')} />}
+        {activeSection === 'community' && communityTab === 'clans' && (
+          <Clans onClose={() => setActiveSection('home')} />
+        )}
+        {activeSection === 'compete' && competeTab === 'challenges' && (
+          <Challenges onClose={() => setActiveSection('home')} />
+        )}
+        {activeSection === 'compete' && competeTab === 'leagues' && (
+          <Leagues onClose={() => setActiveSection('home')} />
+        )}
+        {activeSection === 'activity' && (
+          <ActivityFeed onClose={() => setActiveSection('home')} />
+        )}
       </div>
       
       {showImport && (
@@ -331,17 +369,13 @@ const Index = () => {
         </div>
       )}
 
-      {showHistory && (
-        <div className="fixed inset-0 z-50 md:bg-background/80 md:backdrop-blur-sm md:flex md:items-center md:justify-center md:p-4">
-          <RunHistory onClose={() => setShowHistory(false)} />
-        </div>
-      )}
       {viewUserProfileId && (
         <UserProfile 
           userId={viewUserProfileId} 
           onClose={() => setViewUserProfileId(null)} 
         />
       )}
+      
       {showSummary && summaryData && (
         <RunSummary
           conquered={summaryData.conquered}
