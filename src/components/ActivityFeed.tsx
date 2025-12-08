@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { X, MapPin, Zap, TrendingUp, Activity, Clock, PlayCircle, Trophy, Handshake, ThumbsUp, Sword, Sparkles, Megaphone, Users } from 'lucide-react';
 import { ContentSkeleton } from './ui/content-skeleton';
 import { EmptyState } from './ui/empty-state';

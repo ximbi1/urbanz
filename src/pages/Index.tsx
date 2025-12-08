@@ -1,31 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense, useCallback, memo } from 'react';
 import Header from '@/components/Header';
 import BottomNav, { ActiveSection } from '@/components/BottomNav';
 import SubNavTabs from '@/components/SubNavTabs';
 import MapView from '@/components/MapView';
 import RunControls from '@/components/RunControls';
-import Leagues from '@/components/Leagues';
-import Profile from '@/components/Profile';
 import RunSummary from '@/components/RunSummary';
-import Tutorial from '@/components/Tutorial';
-import Friends from '@/components/Friends';
-import Challenges from '@/components/Challenges';
-import ActivityFeed from '@/components/ActivityFeed';
-import Notifications from '@/components/Notifications';
-import Auth from '@/components/Auth';
 import GPSPermissionDialog from '@/components/GPSPermissionDialog';
-import UserProfile from '@/components/UserProfile';
 import { useRun } from '@/hooks/useRun';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { Toaster } from '@/components/ui/sonner';
-import { ImportRun } from '@/components/ImportRun';
 import { RunPredictionOverlay } from '@/components/RunPredictionOverlay';
-import { RunHistory } from '@/components/RunHistory';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import Clans from '@/components/Clans';
+import { ContentSkeleton } from '@/components/ui/content-skeleton';
+
+// Lazy load heavy components
+const Leagues = lazy(() => import('@/components/Leagues'));
+const Profile = lazy(() => import('@/components/Profile'));
+const Tutorial = lazy(() => import('@/components/Tutorial'));
+const Friends = lazy(() => import('@/components/Friends'));
+const Challenges = lazy(() => import('@/components/Challenges'));
+const ActivityFeed = lazy(() => import('@/components/ActivityFeed'));
+const UserProfile = lazy(() => import('@/components/UserProfile'));
+const ImportRun = lazy(() => import('@/components/ImportRun').then(m => ({ default: m.ImportRun })));
+const RunHistory = lazy(() => import('@/components/RunHistory').then(m => ({ default: m.RunHistory })));
+const Clans = lazy(() => import('@/components/Clans'));
 
 const activityTabs = [
   { id: 'feed', label: 'Feed' },
@@ -41,6 +42,59 @@ const communityTabs = [
   { id: 'friends', label: 'Amigos' },
   { id: 'clans', label: 'Clanes' },
 ];
+
+// Loading fallback component
+const SectionLoader = memo(() => (
+  <div className="p-4 space-y-4">
+    <ContentSkeleton type="friends" count={3} />
+  </div>
+));
+SectionLoader.displayName = 'SectionLoader';
+SectionLoader.displayName = 'SectionLoader';
+
+// Memoized offline banner
+const OfflineBanner = memo(({ 
+  isOffline, 
+  pendingRunsCount, 
+  isOfflineSyncing, 
+  syncRuns 
+}: { 
+  isOffline: boolean; 
+  pendingRunsCount: number; 
+  isOfflineSyncing: boolean; 
+  syncRuns: () => void;
+}) => {
+  if (!isOffline && pendingRunsCount === 0) return null;
+  
+  return (
+    <div className="px-4 mt-2 fixed top-16 left-0 right-0 z-40">
+      <Card className="p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-muted/40 border-dashed border-border/50 backdrop-blur-sm">
+        <div>
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${isOffline ? 'bg-warning animate-pulse' : 'bg-primary'}`} />
+            {isOffline ? 'Modo offline activo' : 'Carreras pendientes'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {isOffline
+              ? 'Tus carreras se sincronizarán al recuperar conexión.'
+              : `${pendingRunsCount} carrera${pendingRunsCount === 1 ? '' : 's'} pendiente${pendingRunsCount === 1 ? '' : 's'}.`}
+          </p>
+        </div>
+        {pendingRunsCount > 0 && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={syncRuns}
+            disabled={isOffline || isOfflineSyncing}
+          >
+            {isOfflineSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          </Button>
+        )}
+      </Card>
+    </div>
+  );
+});
+OfflineBanner.displayName = 'OfflineBanner';
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -102,7 +156,7 @@ const Index = () => {
     };
   }, []);
 
-  const handleStopRun = async () => {
+  const handleStopRun = useCallback(async () => {
     const result = await stopRun();
     if (result) {
       const avgPace = distance > 0 ? (duration / 60) / (distance / 1000) : 0;
@@ -116,7 +170,36 @@ const Index = () => {
       });
       setShowSummary(true);
     }
-  };
+  }, [stopRun, distance, duration]);
+
+  const handleNavigate = useCallback((section: ActiveSection) => {
+    setActiveSection(section);
+  }, []);
+
+  const handleViewUserProfile = useCallback((userId: string) => {
+    setViewUserProfileId(userId);
+  }, []);
+
+  const handleCloseUserProfile = useCallback(() => {
+    setViewUserProfileId(null);
+  }, []);
+
+  const handleImportClick = useCallback(() => {
+    setActiveSection('home');
+    setShowImport(true);
+  }, []);
+
+  const handleCloseImport = useCallback(() => {
+    setShowImport(false);
+  }, []);
+
+  const handleCloseSummary = useCallback(() => {
+    setShowSummary(false);
+  }, []);
+
+  const handleCloseTutorial = useCallback(() => {
+    setShowTutorial(false);
+  }, []);
 
   if (loading) {
     return (
@@ -135,12 +218,18 @@ const Index = () => {
   }
 
   if (!user) {
-    return <Auth />;
+    // Lazy load Auth component
+    const Auth = lazy(() => import('@/components/Auth'));
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="animate-pulse text-muted-foreground">Cargando...</div>
+        </div>
+      }>
+        <Auth />
+      </Suspense>
+    );
   }
-
-  const handleNavigate = (section: ActiveSection) => {
-    setActiveSection(section);
-  };
 
   const renderMobileContent = () => {
     switch (activeSection) {
@@ -166,13 +255,15 @@ const Index = () => {
         return (
           <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
             <SubNavTabs tabs={activityTabs} activeTab={activityTab} onTabChange={setActivityTab} />
-            {activityTab === 'feed' ? (
-              <ActivityFeed onClose={() => setActiveSection('home')} isMobileFullPage />
-            ) : (
-              <div className="px-4">
-                <RunHistory onClose={() => setActivityTab('feed')} />
-              </div>
-            )}
+            <Suspense fallback={<SectionLoader />}>
+              {activityTab === 'feed' ? (
+                <ActivityFeed onClose={() => setActiveSection('home')} isMobileFullPage />
+              ) : (
+                <div className="px-4">
+                  <RunHistory onClose={() => setActivityTab('feed')} />
+                </div>
+              )}
+            </Suspense>
           </div>
         );
       
@@ -180,11 +271,13 @@ const Index = () => {
         return (
           <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
             <SubNavTabs tabs={competeTabs} activeTab={competeTab} onTabChange={setCompeteTab} />
-            {competeTab === 'leagues' ? (
-              <Leagues onClose={() => setActiveSection('home')} isMobileFullPage />
-            ) : (
-              <Challenges onClose={() => setActiveSection('home')} isMobileFullPage />
-            )}
+            <Suspense fallback={<SectionLoader />}>
+              {competeTab === 'leagues' ? (
+                <Leagues onClose={() => setActiveSection('home')} isMobileFullPage />
+              ) : (
+                <Challenges onClose={() => setActiveSection('home')} isMobileFullPage />
+              )}
+            </Suspense>
           </div>
         );
       
@@ -192,29 +285,30 @@ const Index = () => {
         return (
           <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background">
             <SubNavTabs tabs={communityTabs} activeTab={communityTab} onTabChange={setCommunityTab} />
-            {communityTab === 'friends' ? (
-              <Friends 
-                onClose={() => setActiveSection('home')} 
-                isMobileFullPage 
-                onViewUserProfile={(userId) => setViewUserProfileId(userId)}
-              />
-            ) : (
-              <Clans onClose={() => setActiveSection('home')} isMobileFullPage />
-            )}
+            <Suspense fallback={<SectionLoader />}>
+              {communityTab === 'friends' ? (
+                <Friends 
+                  onClose={() => setActiveSection('home')} 
+                  isMobileFullPage 
+                  onViewUserProfile={handleViewUserProfile}
+                />
+              ) : (
+                <Clans onClose={() => setActiveSection('home')} isMobileFullPage />
+              )}
+            </Suspense>
           </div>
         );
       
       case 'you':
         return (
           <div className="pt-16 pb-20 h-screen overflow-y-auto bg-background mobile-full-page-content">
-            <Profile 
-              onClose={() => setActiveSection('home')} 
-              isMobileFullPage 
-              onImportClick={() => {
-                setActiveSection('home');
-                setShowImport(true);
-              }}
-            />
+            <Suspense fallback={<SectionLoader />}>
+              <Profile 
+                onClose={() => setActiveSection('home')} 
+                isMobileFullPage 
+                onImportClick={handleImportClick}
+              />
+            </Suspense>
           </div>
         );
       
@@ -236,33 +330,12 @@ const Index = () => {
         onShowNotifications={() => setActiveSection('you')}
       />
 
-      {(isOffline || pendingRunsCount > 0) && (
-        <div className="px-4 mt-2 fixed top-16 left-0 right-0 z-40">
-          <Card className="p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-muted/40 border-dashed border-border/50 backdrop-blur-sm">
-            <div>
-              <p className="text-sm font-semibold flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${isOffline ? 'bg-warning animate-pulse' : 'bg-primary'}`} />
-                {isOffline ? 'Modo offline activo' : 'Carreras pendientes'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {isOffline
-                  ? 'Tus carreras se sincronizarán al recuperar conexión.'
-                  : `${pendingRunsCount} carrera${pendingRunsCount === 1 ? '' : 's'} pendiente${pendingRunsCount === 1 ? '' : 's'}.`}
-              </p>
-            </div>
-            {pendingRunsCount > 0 && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={syncRuns}
-                disabled={isOffline || isOfflineSyncing}
-              >
-                {isOfflineSyncing ? 'Sincronizando...' : 'Sincronizar'}
-              </Button>
-            )}
-          </Card>
-        </div>
-      )}
+      <OfflineBanner 
+        isOffline={isOffline}
+        pendingRunsCount={pendingRunsCount}
+        isOfflineSyncing={isOfflineSyncing}
+        syncRuns={syncRuns}
+      />
 
       {/* Mobile: Full page sections */}
       <div className="md:hidden">
@@ -304,39 +377,40 @@ const Index = () => {
       )}
 
       {/* Desktop modals */}
-      {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} autoShow={false} />}
-      {activeSection === 'home' && !showSummary && !showTutorial && (
-        <Tutorial onClose={() => setShowTutorial(false)} autoShow={true} />
-      )}
+      <Suspense fallback={null}>
+        {showTutorial && <Tutorial onClose={handleCloseTutorial} autoShow={false} />}
+        {activeSection === 'home' && !showSummary && !showTutorial && (
+          <Tutorial onClose={handleCloseTutorial} autoShow={true} />
+        )}
+      </Suspense>
       
       <div className="hidden md:block">
-        {activeSection === 'you' && (
-          <Profile 
-            onClose={() => setActiveSection('home')}
-            onImportClick={() => {
-              setActiveSection('home');
-              setShowImport(true);
-            }}
-          />
-        )}
-        {activeSection === 'community' && communityTab === 'friends' && (
-          <Friends 
-            onClose={() => setActiveSection('home')} 
-            onViewUserProfile={(userId) => setViewUserProfileId(userId)}
-          />
-        )}
-        {activeSection === 'community' && communityTab === 'clans' && (
-          <Clans onClose={() => setActiveSection('home')} />
-        )}
-        {activeSection === 'compete' && competeTab === 'challenges' && (
-          <Challenges onClose={() => setActiveSection('home')} />
-        )}
-        {activeSection === 'compete' && competeTab === 'leagues' && (
-          <Leagues onClose={() => setActiveSection('home')} />
-        )}
-        {activeSection === 'activity' && (
-          <ActivityFeed onClose={() => setActiveSection('home')} />
-        )}
+        <Suspense fallback={<SectionLoader />}>
+          {activeSection === 'you' && (
+            <Profile 
+              onClose={() => setActiveSection('home')}
+              onImportClick={handleImportClick}
+            />
+          )}
+          {activeSection === 'community' && communityTab === 'friends' && (
+            <Friends 
+              onClose={() => setActiveSection('home')} 
+              onViewUserProfile={handleViewUserProfile}
+            />
+          )}
+          {activeSection === 'community' && communityTab === 'clans' && (
+            <Clans onClose={() => setActiveSection('home')} />
+          )}
+          {activeSection === 'compete' && competeTab === 'challenges' && (
+            <Challenges onClose={() => setActiveSection('home')} />
+          )}
+          {activeSection === 'compete' && competeTab === 'leagues' && (
+            <Leagues onClose={() => setActiveSection('home')} />
+          )}
+          {activeSection === 'activity' && (
+            <ActivityFeed onClose={() => setActiveSection('home')} />
+          )}
+        </Suspense>
       </div>
       
       {showImport && (
@@ -344,22 +418,26 @@ const Index = () => {
           <div className="w-full max-w-lg">
             <div className="mb-4 flex justify-end">
               <button
-                onClick={() => setShowImport(false)}
+                onClick={handleCloseImport}
                 className="text-muted-foreground hover:text-foreground text-2xl px-3"
               >
                 ✕
               </button>
             </div>
-            <ImportRun onImportComplete={() => setShowImport(false)} />
+            <Suspense fallback={<SectionLoader />}>
+              <ImportRun onImportComplete={handleCloseImport} />
+            </Suspense>
           </div>
         </div>
       )}
 
       {viewUserProfileId && (
-        <UserProfile 
-          userId={viewUserProfileId} 
-          onClose={() => setViewUserProfileId(null)} 
-        />
+        <Suspense fallback={<SectionLoader />}>
+          <UserProfile 
+            userId={viewUserProfileId} 
+            onClose={handleCloseUserProfile} 
+          />
+        </Suspense>
       )}
       
       {showSummary && summaryData && (
@@ -372,7 +450,7 @@ const Index = () => {
           duration={summaryData.duration}
           avgPace={summaryData.avgPace}
           avgSpeed={summaryData.avgSpeed}
-          onClose={() => setShowSummary(false)}
+          onClose={handleCloseSummary}
         />
       )}
 

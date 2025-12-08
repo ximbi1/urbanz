@@ -75,6 +75,31 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     return inner.every((point) => isPointInPolygon(point, outer));
   };
 
+  const calculateCentroid = useCallback((polygon: Coordinate[]) => {
+    if (!polygon.length) {
+      return { lat: 0, lng: 0 };
+    }
+    try {
+      const bounds = new mapboxgl.LngLatBounds(
+        [polygon[0].lng, polygon[0].lat],
+        [polygon[0].lng, polygon[0].lat]
+      );
+      polygon.forEach((coord) => {
+        bounds.extend([coord.lng, coord.lat]);
+      });
+      const center = bounds.getCenter();
+      return { lat: center.lat, lng: center.lng };
+    } catch {
+      return polygon.reduce(
+        (acc, coord) => ({
+          lat: acc.lat + coord.lat / polygon.length,
+          lng: acc.lng + coord.lng / polygon.length,
+        }),
+        { lat: 0, lng: 0 }
+      );
+    }
+  }, []);
+
   // Cargar token de Mapbox desde edge function
   useEffect(() => {
     const fetchMapboxToken = async () => {
@@ -1350,27 +1375,3 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 };
 
 export default MapView;
-  const calculateCentroid = (polygon: Coordinate[]) => {
-    if (!polygon.length) {
-      return { lat: 0, lng: 0 };
-    }
-    try {
-      const bounds = new mapboxgl.LngLatBounds(
-        [polygon[0].lng, polygon[0].lat],
-        [polygon[0].lng, polygon[0].lat]
-      );
-      polygon.forEach((coord) => {
-        bounds.extend([coord.lng, coord.lat]);
-      });
-      const center = bounds.getCenter();
-      return { lat: center.lat, lng: center.lng };
-    } catch (error) {
-      return polygon.reduce(
-        (acc, coord) => ({
-          lat: acc.lat + coord.lat / polygon.length,
-          lng: acc.lng + coord.lng / polygon.length,
-        }),
-        { lat: 0, lng: 0 }
-      );
-    }
-  };
