@@ -647,7 +647,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, username, total_points, total_territories, total_distance, season_points, historical_points')
+      .select('id, username, total_points, total_territories, total_distance, season_points, historical_points, league_shard')
       .eq('id', user.id)
       .single()
 
@@ -856,6 +856,7 @@ Deno.serve(async (req) => {
           last_attack_at: now.toISOString(),
           conquest_points: rewardPoints,
           points: rewardPoints,
+          league_shard: profile.league_shard || 'bronze-1',
         })
         .eq('id', targetTerritory.id)
         .select('id')
@@ -940,6 +941,7 @@ Deno.serve(async (req) => {
           status: 'protected',
           conquest_points: rewardPoints,
           points: rewardPoints,
+          league_shard: profile.league_shard || 'bronze-1',
         })
         .select('id')
         .single()
@@ -1026,6 +1028,7 @@ Deno.serve(async (req) => {
         territories_stolen: territoriesStolen,
         territories_lost: territoriesLost,
         points_gained: pointsGained,
+        league_shard: profile.league_shard || 'bronze-1',
       })
       .select('id')
       .single()
