@@ -17,7 +17,7 @@ const navItems: { id: ActiveSection; icon: typeof Home; label: string }[] = [
 
 const BottomNav = ({ activeSection, onNavigate }: BottomNavProps) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card backdrop-blur-md border-t border-border/30 safe-area-bottom">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card backdrop-blur-md border-t border-border/30 safe-area-bottom">
       <div className="flex items-center justify-around px-2 py-2 max-w-screen-sm mx-auto">
         {navItems.map(({ id, icon: Icon, label }) => {
           const isActive = activeSection === id;
