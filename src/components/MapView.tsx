@@ -843,6 +843,59 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     });
   }, [explorerRoutes, playerSettings?.explorerMode]);
 
+  // Renderizar parques como polígonos cuando se habilita el filtro
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+
+    if (map.current.getLayer('parks-fill')) map.current.removeLayer('parks-fill');
+    if (map.current.getLayer('parks-outline')) map.current.removeLayer('parks-outline');
+    if (map.current.getSource('parks')) map.current.removeSource('parks');
+
+    if (!showParks) return;
+
+    const parkFeatures = mapPois
+      .filter(poi => poi.category === 'park' && poi.coordinates?.length)
+      .map(poi => ({
+        type: 'Feature' as const,
+        properties: { name: poi.name },
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [poi.coordinates.map(c => [c.lng, c.lat])],
+        },
+      }));
+
+    if (!parkFeatures.length) return;
+
+    map.current.addSource('parks', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: parkFeatures,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'parks-fill',
+      type: 'fill',
+      source: 'parks',
+      paint: {
+        'fill-color': '#22c55e',
+        'fill-opacity': 0.12,
+      },
+    });
+
+    map.current.addLayer({
+      id: 'parks-outline',
+      type: 'line',
+      source: 'parks',
+      paint: {
+        'line-color': '#22c55e',
+        'line-width': 1.5,
+        'line-opacity': 0.8,
+      },
+    });
+  }, [showParks, mapPois]);
+
   useEffect(() => {
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
     challengeMarkersRef.current.forEach(marker => marker.remove());

@@ -352,7 +352,12 @@ const derivePoiTags = (runPolygon: any, pois: any[]) => {
       console.warn('Error checking POI intersection:', e)
     }
   })
-  return tags
+  // Eliminar duplicados por nombre
+  const uniq = new Map<string, { type: string; name: string }>()
+  tags.forEach(tag => {
+    if (!uniq.has(tag.name)) uniq.set(tag.name, tag)
+  })
+  return Array.from(uniq.values())
 }
 
 const fetchActiveMapChallenges = async () => {
