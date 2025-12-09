@@ -11,7 +11,7 @@ const PROTECTION_DURATION_MS = 24 * 60 * 60 * 1000
 const STEAL_COOLDOWN_MS = 6 * 60 * 60 * 1000
 const MINIMUM_AREA_M2 = 50
 const OVERLAP_THRESHOLD = 0.8
-const PARTIAL_OVERLAP_THRESHOLD = 0.1 // Umbral mínimo para considerar solapamiento parcial
+const PARTIAL_OVERLAP_THRESHOLD = 0.3 // Umbral mínimo para robo parcial
 const CLAN_MISSION_LABELS: Record<string, string> = {
   park: 'Ruta de parques',
   fountain: 'Ruta de hidratación',
@@ -233,6 +233,38 @@ const toPolygonCoords = (path: Coordinate[]) => {
     coords.push([...first])
   }
   return coords
+}
+
+const toLatLngCoordsFromGeo = (feature: any): Coordinate[] => {
+  if (!feature?.geometry) return []
+  const { type, coordinates } = feature.geometry
+
+  const extractRing = (ring: number[][]): Coordinate[] => ring.map(([lng, lat]) => ({ lat, lng }))
+
+  if (type === 'Polygon') {
+    const ring = coordinates[0] || []
+    return extractRing(ring)
+  }
+
+  if (type === 'MultiPolygon') {
+    let best: Coordinate[] = []
+    let bestArea = 0
+    for (const poly of coordinates) {
+      const ring = poly[0] || []
+      const asCoords = extractRing(ring)
+      if (asCoords.length >= 3) {
+        const polyFeature = polygon([ring])
+        const a = turfArea(polyFeature)
+        if (a > bestArea) {
+          bestArea = a
+          best = asCoords
+        }
+      }
+    }
+    return best
+  }
+
+  return []
 }
 
 const calculateRewardPoints = (distance: number, area: number, isSteal: boolean) => {
@@ -863,6 +895,8 @@ Deno.serve(async (req) => {
 
     let targetTerritory: any = null
     let highestOverlap = 0
+    let targetTerritoryPolygon: any = null
+    let targetOverlapGeom: any = null
     let overlappingTerritories: any[] = []
     let containingTerritory: any = null // Territorio que contiene completamente al nuevo
 
@@ -898,13 +932,16 @@ Deno.serve(async (req) => {
               polygon: territoryPolygon,
               overlapRatio: ratio,
               newOverlapRatio: newRatio,
-              overlapArea
+              overlapArea,
+              overlapGeom: overlap
             })
           }
           
           if (ratio > highestOverlap) {
             highestOverlap = ratio
             targetTerritory = territory
+            targetTerritoryPolygon = territoryPolygon
+            targetOverlapGeom = overlap
           }
         } catch (e) {
           console.warn('Error procesando territorio existente:', e)
@@ -913,6 +950,8 @@ Deno.serve(async (req) => {
     }
 
     const isStealAttempt = targetTerritory && targetTerritory.user_id !== user.id && highestOverlap >= OVERLAP_THRESHOLD
+    const isPartialStealAttempt = targetTerritory && targetTerritory.user_id !== user.id &&
+      highestOverlap >= PARTIAL_OVERLAP_THRESHOLD && highestOverlap < OVERLAP_THRESHOLD && Boolean(targetOverlapGeom)
     const isOwnTerritory = targetTerritory && targetTerritory.user_id === user.id && highestOverlap >= OVERLAP_THRESHOLD
     
     // Verificar si es una conquista interior (correr dentro de territorio ajeno)
@@ -943,37 +982,23 @@ Deno.serve(async (req) => {
     let missionRewardPoints = 0
     let missionRewardShields = 0
 
-    const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt || isInnerConquest))
+    // CASO 1 y 2: Robo (parcial o alto solapamiento) sin tomar el 100% del territorio
+    const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt || isPartialStealAttempt || isInnerConquest))
     pointsGained = rewardPoints
 
-    // CASO 1: Intento de robo (solapamiento >= 80%)
-    if (isStealAttempt && targetTerritory) {
+    if ((isStealAttempt || isPartialStealAttempt) && targetTerritory && targetTerritoryPolygon && targetOverlapGeom) {
       const ownerLevel = calculateLevel(targetTerritory.owner?.total_points || 0)
       const requiredPace = calculateRequiredPace(targetTerritory.avg_pace, ownerLevel)
-      const territoryUrl = `/territories/${targetTerritory.id}`
-      const notifyDefender = async (body: string) => {
-        await sendPushNotification(targetTerritory.user_id, {
-          title: 'Actividad en tus territorios',
-          body,
-          data: { url: territoryUrl },
-          tag: targetTerritory.id,
-        })
+      const overlapArea = turfArea(targetOverlapGeom)
+
+      if (overlapArea < MINIMUM_AREA_M2) {
+        return new Response(
+          JSON.stringify({ error: 'La porción solapada es demasiado pequeña para robarla' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
       if (avgPace > requiredPace) {
-        await supabaseAdmin
-          .from('territory_events')
-          .insert({
-            territory_id: targetTerritory.id,
-            attacker_id: user.id,
-            defender_id: targetTerritory.user_id,
-            event_type: 'steal',
-            result: 'failed',
-            overlap_ratio: highestOverlap,
-            pace: avgPace,
-            area,
-        })
-        await notifyDefender(`${attackerName} intentó robarte un territorio, pero no alcanzó el ritmo necesario.`)
         return new Response(
           JSON.stringify({ error: `Necesitas un ritmo de ${requiredPace.toFixed(2)} min/km o menos para robar este territorio` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -981,19 +1006,6 @@ Deno.serve(async (req) => {
       }
 
       if (targetTerritory.protected_until && new Date(targetTerritory.protected_until) > now) {
-        await supabaseAdmin
-          .from('territory_events')
-          .insert({
-            territory_id: targetTerritory.id,
-            attacker_id: user.id,
-            defender_id: targetTerritory.user_id,
-            event_type: 'steal',
-            result: 'failed',
-            overlap_ratio: highestOverlap,
-            pace: avgPace,
-            area,
-        })
-        await notifyDefender(`${attackerName} atacó tu territorio, pero sigues protegido.`)
         return new Response(
           JSON.stringify({ error: 'El territorio está protegido temporalmente' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1019,19 +1031,6 @@ Deno.serve(async (req) => {
           ? new Date(targetTerritory.cooldown_until).getTime() - now.getTime()
           : 0
         const remaining = Math.max(baseRemaining, cooldownRemaining, 0)
-        await supabaseAdmin
-          .from('territory_events')
-          .insert({
-            territory_id: targetTerritory.id,
-            attacker_id: user.id,
-            defender_id: targetTerritory.user_id,
-            event_type: 'steal',
-            result: 'failed',
-            overlap_ratio: highestOverlap,
-            pace: avgPace,
-            area,
-        })
-        await notifyDefender(`${attackerName} debe esperar antes de volver a atacar tu territorio.`)
         return new Response(
           JSON.stringify({ error: 'Debes esperar antes de volver a atacar este territorio', cooldown: remaining }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1040,49 +1039,92 @@ Deno.serve(async (req) => {
 
       const activeShield = await fetchActiveShield(targetTerritory.id)
       if (activeShield && targetTerritory.user_id !== user.id) {
-        await notifyDefender(`${attackerName} ha intentado atacar, pero tu escudo sigue activo.`)
         return new Response(
           JSON.stringify({ error: 'Este territorio está protegido con un escudo activo' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
+      const overlapCoords = toLatLngCoordsFromGeo(targetOverlapGeom)
+      if (overlapCoords.length < 3) {
+        return new Response(
+          JSON.stringify({ error: 'No se pudo calcular la porción robada' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const reducedGeom = difference(targetTerritoryPolygon, targetOverlapGeom)
+      if (!reducedGeom) {
+        return new Response(
+          JSON.stringify({ error: 'No se pudo recalcular el territorio original' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const reducedCoords = toLatLngCoordsFromGeo(reducedGeom)
+      if (reducedCoords.length < 3) {
+        return new Response(
+          JSON.stringify({ error: 'El territorio restante es demasiado pequeño tras el recorte' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const reducedArea = turfArea(reducedGeom)
+      const reducedPerimeter = calculatePerimeter(reducedCoords)
+      const rewardPointsPartial = calculateRewardPoints(distance, overlapArea, true)
       const newRequiredPace = calculateRequiredPace(avgPace, userLevel)
 
-      const { data: updated, error: updateError } = await supabaseAdmin
+      // Actualizar territorio original (defensor) con la porción restante
+      await supabaseAdmin
         .from('territories')
         .update({
-          user_id: user.id,
-          coordinates: path,
-          area,
-          perimeter,
-          avg_pace: avgPace,
-          required_pace: newRequiredPace,
+          coordinates: reducedCoords,
+          area: reducedArea,
+          perimeter: reducedPerimeter,
           protected_until: protectedUntil,
           cooldown_until: new Date(now.getTime() + STEAL_COOLDOWN_MS).toISOString(),
           status: 'protected',
           last_attacker_id: user.id,
           last_defender_id: targetTerritory.user_id,
           last_attack_at: now.toISOString(),
-          conquest_points: rewardPoints,
-          points: rewardPoints,
-          league_shard: profile.league_shard || 'bronze-1',
+          points: Math.max((targetTerritory.points || 0) - rewardPointsPartial, 0),
+          conquest_points: Math.max((targetTerritory.conquest_points || 0) - rewardPointsPartial, 0),
         })
         .eq('id', targetTerritory.id)
+
+      // Crear territorio nuevo para el atacante con la porción robada
+      const partialPerimeter = calculatePerimeter(overlapCoords)
+      const { data: newPartial, error: newPartialError } = await supabaseAdmin
+        .from('territories')
+        .insert({
+          user_id: user.id,
+          coordinates: overlapCoords,
+          area: overlapArea,
+          perimeter: partialPerimeter,
+          avg_pace: avgPace,
+          required_pace: newRequiredPace,
+          protected_until: protectedUntil,
+          cooldown_until: new Date(now.getTime() + STEAL_COOLDOWN_MS).toISOString(),
+          status: 'protected',
+          conquest_points: rewardPointsPartial,
+          points: rewardPointsPartial,
+          league_shard: profile.league_shard || 'bronze-1',
+        })
         .select('id')
         .single()
 
-      if (updateError || !updated) {
-        throw new Error('No se pudo actualizar el territorio robado')
+      if (newPartialError || !newPartial) {
+        throw new Error('No se pudo crear el territorio parcial robado')
       }
 
-      territoryId = updated.id
+      territoryId = newPartial.id
       territoriesStolen = 1
       action = 'stolen'
+      pointsGained = rewardPointsPartial
 
-      profileState.total_points = (profileState.total_points || 0) + rewardPoints
-      profileState.season_points = (profileState.season_points || 0) + rewardPoints
-      profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
+      profileState.total_points = (profileState.total_points || 0) + rewardPointsPartial
+      profileState.season_points = (profileState.season_points || 0) + rewardPointsPartial
+      profileState.historical_points = (profileState.historical_points || 0) + rewardPointsPartial
       profileState.total_territories = (profileState.total_territories || 0) + 1
       profileState.total_distance = (profileState.total_distance || 0) + distance
 
@@ -1098,15 +1140,29 @@ Deno.serve(async (req) => {
         .eq('id', user.id)
 
       if (targetTerritory.user_id) {
-        await decrementDefenderProfile(targetTerritory.user_id, targetTerritory.conquest_points)
-        await supabaseAdmin
-          .from('territory_shields')
-          .delete()
-          .eq('territory_id', targetTerritory.id)
-        await notifyDefender(`${attackerName} conquistó uno de tus territorios.`)
+        await sendPushNotification(targetTerritory.user_id, {
+          title: '⚠️ Robo parcial',
+          body: `${attackerName} ha conquistado una parte de tu territorio`,
+          data: { url: `/territories/${targetTerritory.id}` },
+          tag: targetTerritory.id,
+        })
       }
+
+      await supabaseAdmin
+        .from('territory_events')
+        .insert({
+          territory_id: targetTerritory.id,
+          attacker_id: user.id,
+          defender_id: targetTerritory.user_id,
+          event_type: 'steal',
+          result: 'partial',
+          overlap_ratio: highestOverlap,
+          pace: avgPace,
+          area: overlapArea,
+          points_awarded: rewardPointsPartial,
+        })
     }
-    // CASO 2: Conquista interior (correr dentro de territorio ajeno sin protección)
+    // CASO 3: Conquista interior (correr dentro de territorio ajeno sin protección)
     else if (isInnerConquest && containingTerritory) {
       const targetTerr = containingTerritory.territory
       
