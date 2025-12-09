@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { polygon, area as turfArea, intersect, booleanPointInPolygon, point } from 'npm:@turf/turf@6.5.0'
+import { polygon, area as turfArea, intersect, difference, booleanPointInPolygon, point, simplify, buffer, union, booleanContains } from 'npm:@turf/turf@6.5.0'
 import webpush from 'npm:web-push@3.6.1'
 
 const corsHeaders = {
@@ -11,6 +11,7 @@ const PROTECTION_DURATION_MS = 24 * 60 * 60 * 1000
 const STEAL_COOLDOWN_MS = 6 * 60 * 60 * 1000
 const MINIMUM_AREA_M2 = 50
 const OVERLAP_THRESHOLD = 0.8
+const PARTIAL_OVERLAP_THRESHOLD = 0.1 // Umbral mínimo para considerar solapamiento parcial
 const CLAN_MISSION_LABELS: Record<string, string> = {
   park: 'Ruta de parques',
   fountain: 'Ruta de hidratación',
@@ -101,6 +102,64 @@ const isPolygonClosed = (path: Coordinate[], threshold = 50): boolean => {
   return distance <= threshold
 }
 
+// Detectar loops cerrados dentro de una ruta (para vueltas a plazas, etc.)
+const findClosedLoops = (path: Coordinate[], threshold = 30): Coordinate[][] => {
+  const loops: Coordinate[][] = []
+  if (path.length < 4) return loops
+
+  // Buscar puntos donde la ruta se cruza consigo misma
+  for (let i = 0; i < path.length - 3; i++) {
+    for (let j = i + 3; j < path.length; j++) {
+      const dist = calculateDistance(path[i], path[j])
+      if (dist <= threshold) {
+        // Encontramos un loop entre i y j
+        const loopPath = path.slice(i, j + 1)
+        if (loopPath.length >= 4) {
+          // Cerrar el loop añadiendo el primer punto al final
+          loopPath.push({ ...loopPath[0] })
+          loops.push(loopPath)
+        }
+        // Saltamos j para no encontrar loops duplicados
+        break
+      }
+    }
+  }
+
+  return loops
+}
+
+// Unir múltiples loops en un solo polígono
+const mergeLoopsIntoPolygon = (mainPath: Coordinate[], loops: Coordinate[][]): Coordinate[] => {
+  if (loops.length === 0) return mainPath
+
+  try {
+    // Crear polígono principal
+    const mainCoords = toPolygonCoords(mainPath)
+    let mergedPolygon = polygon([mainCoords])
+
+    // Unir cada loop al polígono principal
+    for (const loop of loops) {
+      try {
+        const loopCoords = toPolygonCoords(loop)
+        const loopPolygon = polygon([loopCoords])
+        const unified = union(mergedPolygon, loopPolygon)
+        if (unified && unified.geometry.type === 'Polygon') {
+          mergedPolygon = unified as any
+        }
+      } catch (e) {
+        console.warn('Error uniendo loop:', e)
+      }
+    }
+
+    // Convertir de vuelta a coordenadas
+    const resultCoords = mergedPolygon.geometry.coordinates[0]
+    return resultCoords.map((coord: number[]) => ({ lng: coord[0], lat: coord[1] }))
+  } catch (e) {
+    console.warn('Error en mergeLoopsIntoPolygon:', e)
+    return mainPath
+  }
+}
+
 const calculatePolygonArea = (coordinates: Coordinate[]): number => {
   if (coordinates.length < 3) return 0
   let area = 0
@@ -151,7 +210,6 @@ const calculateLevel = (totalPoints: number) => {
 }
 
 const getMaxAreaForLevel = (_level: number) => {
-  // Flexibilizamos el límite: todos los niveles comparten el tope global de 5 km².
   return 5_000_000
 }
 
@@ -222,9 +280,13 @@ const derivePoiTags = (runPolygon: any, pois: any[]) => {
   pois.forEach((poi) => {
     const coords = (poi.coordinates as any[])?.map((coord) => [coord.lng, coord.lat])
     if (!coords || coords.length < 3) return
-    const poiPolygon = polygon([coords])
-    if (intersect(runPolygon, poiPolygon)) {
-      tags.push({ type: poi.category, name: poi.name })
+    try {
+      const poiPolygon = polygon([coords])
+      if (intersect(runPolygon, poiPolygon)) {
+        tags.push({ type: poi.category, name: poi.name })
+      }
+    } catch (e) {
+      console.warn('Error checking POI intersection:', e)
     }
   })
   return tags
@@ -267,6 +329,7 @@ const awardMapChallenges = async (
       .from('map_challenge_claims')
       .insert({ challenge_id: challenge.id, user_id: userId })
 
+    // Actualizar puntos en el perfil
     profileState.total_points = (profileState.total_points || 0) + challenge.reward_points
     profileState.season_points = (profileState.season_points || 0) + challenge.reward_points
     profileState.historical_points = (profileState.historical_points || 0) + challenge.reward_points
@@ -279,6 +342,17 @@ const awardMapChallenges = async (
         historical_points: profileState.historical_points,
       })
       .eq('id', userId)
+
+    // Crear notificación en la base de datos
+    await supabaseAdmin
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        type: 'challenge',
+        title: '🏅 Desafío completado',
+        message: `Has completado "${challenge.name}" y ganado +${challenge.reward_points} puntos`,
+        related_id: challenge.id,
+      })
 
     await notify(`Has completado ${challenge.name}. +${challenge.reward_points} puntos`)
     completed.push(challenge)
@@ -592,6 +666,91 @@ const sendPushNotification = async (
   }))
 }
 
+// Calcular diferencia de polígonos para manejar solapamientos parciales
+const calculatePolygonDifference = (newPolygon: any, existingPolygons: any[]): any => {
+  let resultPolygon = newPolygon
+  
+  for (const existing of existingPolygons) {
+    try {
+      const diff = difference(resultPolygon, existing)
+      if (diff && diff.geometry.type === 'Polygon') {
+        resultPolygon = diff
+      } else if (diff && diff.geometry.type === 'MultiPolygon') {
+        // Tomar el polígono más grande si se divide en múltiples
+        let largestArea = 0
+        let largestPoly = null
+        for (const coords of diff.geometry.coordinates) {
+          const poly = polygon(coords)
+          const polyArea = turfArea(poly)
+          if (polyArea > largestArea) {
+            largestArea = polyArea
+            largestPoly = poly
+          }
+        }
+        if (largestPoly) {
+          resultPolygon = largestPoly
+        }
+      }
+    } catch (e) {
+      console.warn('Error calculando diferencia de polígonos:', e)
+    }
+  }
+  
+  return resultPolygon
+}
+
+// Dividir territorio existente cuando alguien conquista una parte interior
+const splitTerritoryWithInnerConquest = async (
+  existingTerritory: any,
+  innerPolygon: any,
+  attackerId: string,
+  attackerLeagueShard: string
+): Promise<{ remainingCoords: Coordinate[] | null; innerArea: number }> => {
+  try {
+    const existingCoords = (existingTerritory.coordinates as any[]).map((coord: any) => [coord.lng, coord.lat])
+    if (existingCoords[0][0] !== existingCoords[existingCoords.length - 1][0] || 
+        existingCoords[0][1] !== existingCoords[existingCoords.length - 1][1]) {
+      existingCoords.push([...existingCoords[0]])
+    }
+    const existingPoly = polygon([existingCoords])
+    
+    // Verificar si el polígono interior está completamente dentro del existente
+    if (!booleanContains(existingPoly, innerPolygon)) {
+      return { remainingCoords: null, innerArea: 0 }
+    }
+    
+    // Calcular la diferencia (territorio que queda al propietario original)
+    const remainingPoly = difference(existingPoly, innerPolygon)
+    
+    if (!remainingPoly) {
+      return { remainingCoords: null, innerArea: turfArea(innerPolygon) }
+    }
+    
+    if (remainingPoly.geometry.type === 'Polygon') {
+      const coords = remainingPoly.geometry.coordinates[0].map((c: number[]) => ({ lng: c[0], lat: c[1] }))
+      return { remainingCoords: coords, innerArea: turfArea(innerPolygon) }
+    } else if (remainingPoly.geometry.type === 'MultiPolygon') {
+      // Tomar el polígono más grande
+      let largestArea = 0
+      let largestCoords: Coordinate[] | null = null
+      for (const coords of remainingPoly.geometry.coordinates) {
+        const poly = polygon(coords)
+        const polyArea = turfArea(poly)
+        if (polyArea > largestArea) {
+          largestArea = polyArea
+          largestCoords = coords[0].map((c: number[]) => ({ lng: c[0], lat: c[1] }))
+        }
+      }
+      return { remainingCoords: largestCoords, innerArea: turfArea(innerPolygon) }
+    }
+    
+    return { remainingCoords: null, innerArea: 0 }
+  } catch (e) {
+    console.error('Error en splitTerritoryWithInnerConquest:', e)
+    return { remainingCoords: null, innerArea: 0 }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -624,7 +783,14 @@ Deno.serve(async (req) => {
       )
     }
 
-    const path = payload.path
+    let path = payload.path
+
+    // Detectar loops cerrados dentro de la ruta (para vueltas a plazas)
+    const loops = findClosedLoops(path, 30)
+    if (loops.length > 0) {
+      console.log(`Detectados ${loops.length} loops en la ruta`)
+      path = mergeLoopsIntoPolygon(path, loops)
+    }
 
     if (!isPolygonClosed(path)) {
       return new Response(
@@ -633,7 +799,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const distance = calculatePathDistance(path)
+    const distance = calculatePathDistance(payload.path) // Usar path original para distancia
     const area = calculatePolygonArea(path)
     const perimeter = calculatePerimeter(path)
     const avgPace = calculateAveragePace(distance, payload.duration)
@@ -697,28 +863,71 @@ Deno.serve(async (req) => {
 
     let targetTerritory: any = null
     let highestOverlap = 0
+    let overlappingTerritories: any[] = []
+    let containingTerritory: any = null // Territorio que contiene completamente al nuevo
 
     if (territories) {
       for (const territory of territories) {
         const coords = (territory.coordinates as any[] | null) ?? []
         if (!coords.length) continue
-        const territoryPolygon = polygon([
-          coords.map((coord: any) => [coord.lng, coord.lat])
-        ])
-        const overlap = intersect(runPolygon, territoryPolygon)
-        if (!overlap) continue
-        const overlapArea = turfArea(overlap)
-        const ratio = territory.area > 0 ? overlapArea / territory.area : 0
-        if (ratio > highestOverlap) {
-          highestOverlap = ratio
-          targetTerritory = territory
+        
+        try {
+          const territoryCoords = coords.map((coord: any) => [coord.lng, coord.lat])
+          if (territoryCoords[0][0] !== territoryCoords[territoryCoords.length - 1][0] || 
+              territoryCoords[0][1] !== territoryCoords[territoryCoords.length - 1][1]) {
+            territoryCoords.push([...territoryCoords[0]])
+          }
+          const territoryPolygon = polygon([territoryCoords])
+          
+          // Verificar si el nuevo polígono está dentro de uno existente
+          if (booleanContains(territoryPolygon, runPolygon)) {
+            containingTerritory = { ...territory, polygon: territoryPolygon }
+          }
+          
+          const overlap = intersect(runPolygon, territoryPolygon)
+          if (!overlap) continue
+          
+          const overlapArea = turfArea(overlap)
+          const ratio = territory.area > 0 ? overlapArea / territory.area : 0
+          const newRatio = area > 0 ? overlapArea / area : 0
+          
+          // Guardar todos los territorios con solapamiento significativo
+          if (ratio > PARTIAL_OVERLAP_THRESHOLD || newRatio > PARTIAL_OVERLAP_THRESHOLD) {
+            overlappingTerritories.push({
+              territory,
+              polygon: territoryPolygon,
+              overlapRatio: ratio,
+              newOverlapRatio: newRatio,
+              overlapArea
+            })
+          }
+          
+          if (ratio > highestOverlap) {
+            highestOverlap = ratio
+            targetTerritory = territory
+          }
+        } catch (e) {
+          console.warn('Error procesando territorio existente:', e)
         }
       }
     }
 
     const isStealAttempt = targetTerritory && targetTerritory.user_id !== user.id && highestOverlap >= OVERLAP_THRESHOLD
     const isOwnTerritory = targetTerritory && targetTerritory.user_id === user.id && highestOverlap >= OVERLAP_THRESHOLD
-    const isNewTerritory = !isStealAttempt && !isOwnTerritory
+    
+    // Verificar si es una conquista interior (correr dentro de territorio ajeno)
+    const isInnerConquest = containingTerritory && 
+                           containingTerritory.territory.user_id !== user.id && 
+                           !isStealAttempt
+    
+    // Verificar si hay solapamiento parcial con territorios ajenos
+    const hasPartialOverlap = overlappingTerritories.some(
+      ot => ot.territory.user_id !== user.id && 
+           ot.overlapRatio < OVERLAP_THRESHOLD && 
+           ot.overlapRatio > PARTIAL_OVERLAP_THRESHOLD
+    )
+    
+    const isNewTerritory = !isStealAttempt && !isOwnTerritory && !isInnerConquest
 
     let territoriesConquered = 0
     let territoriesStolen = 0
@@ -726,7 +935,7 @@ Deno.serve(async (req) => {
     let pointsGained = 0
     let territoryId: string | null = null
     let runId: string | null = null
-    let action: 'conquered' | 'stolen' | 'reinforced' = 'conquered'
+    let action: 'conquered' | 'stolen' | 'reinforced' | 'inner_conquest' = 'conquered'
     let poiTags: { type: string; name: string }[] = []
     let challengeRewards: string[] = []
     let missionsCompleted: string[] = []
@@ -734,9 +943,10 @@ Deno.serve(async (req) => {
     let missionRewardPoints = 0
     let missionRewardShields = 0
 
-    const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt))
+    const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt || isInnerConquest))
     pointsGained = rewardPoints
 
+    // CASO 1: Intento de robo (solapamiento >= 80%)
     if (isStealAttempt && targetTerritory) {
       const ownerLevel = calculateLevel(targetTerritory.owner?.total_points || 0)
       const requiredPace = calculateRequiredPace(targetTerritory.avg_pace, ownerLevel)
@@ -895,7 +1105,107 @@ Deno.serve(async (req) => {
           .eq('territory_id', targetTerritory.id)
         await notifyDefender(`${attackerName} conquistó uno de tus territorios.`)
       }
-    } else if (isOwnTerritory && targetTerritory) {
+    }
+    // CASO 2: Conquista interior (correr dentro de territorio ajeno sin protección)
+    else if (isInnerConquest && containingTerritory) {
+      const targetTerr = containingTerritory.territory
+      
+      // Verificar protección
+      if (targetTerr.protected_until && new Date(targetTerr.protected_until) > now) {
+        return new Response(
+          JSON.stringify({ error: 'El territorio está protegido temporalmente. Espera a que expire el escudo.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      const activeShield = await fetchActiveShield(targetTerr.id)
+      if (activeShield) {
+        return new Response(
+          JSON.stringify({ error: 'Este territorio está protegido con un escudo activo' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      
+      // Dividir el territorio
+      const { remainingCoords, innerArea } = await splitTerritoryWithInnerConquest(
+        targetTerr,
+        runPolygon,
+        user.id,
+        profile.league_shard || 'bronze-1'
+      )
+      
+      if (remainingCoords && remainingCoords.length >= 4) {
+        // Actualizar territorio original con la parte restante
+        const remainingArea = calculatePolygonArea(remainingCoords)
+        const remainingPerimeter = calculatePerimeter(remainingCoords)
+        
+        await supabaseAdmin
+          .from('territories')
+          .update({
+            coordinates: remainingCoords,
+            area: remainingArea,
+            perimeter: remainingPerimeter,
+            points: Math.floor(targetTerr.points * (remainingArea / targetTerr.area)),
+          })
+          .eq('id', targetTerr.id)
+      }
+      
+      // Crear nuevo territorio para el atacante
+      const requiredPace = calculateRequiredPace(avgPace, userLevel)
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from('territories')
+        .insert({
+          user_id: user.id,
+          coordinates: path,
+          area,
+          perimeter,
+          avg_pace: avgPace,
+          required_pace: requiredPace,
+          protected_until: protectedUntil,
+          cooldown_until: new Date(now.getTime() + STEAL_COOLDOWN_MS).toISOString(),
+          status: 'protected',
+          conquest_points: rewardPoints,
+          points: rewardPoints,
+          league_shard: profile.league_shard || 'bronze-1',
+        })
+        .select('id')
+        .single()
+
+      if (insertError || !inserted) {
+        throw new Error('No se pudo crear el territorio interior')
+      }
+      
+      territoryId = inserted.id
+      territoriesConquered = 1
+      action = 'inner_conquest'
+      
+      profileState.total_points = (profileState.total_points || 0) + rewardPoints
+      profileState.season_points = (profileState.season_points || 0) + rewardPoints
+      profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
+      profileState.total_territories = (profileState.total_territories || 0) + 1
+      profileState.total_distance = (profileState.total_distance || 0) + distance
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({
+          total_points: profileState.total_points,
+          season_points: profileState.season_points,
+          historical_points: profileState.historical_points,
+          total_territories: profileState.total_territories,
+          total_distance: profileState.total_distance,
+        })
+        .eq('id', user.id)
+      
+      // Notificar al defensor
+      await sendPushNotification(targetTerr.user_id, {
+        title: '⚔️ Conquista interior',
+        body: `${attackerName} ha conquistado una zona dentro de tu territorio`,
+        data: { url: `/territories/${targetTerr.id}` },
+        tag: targetTerr.id,
+      })
+    }
+    // CASO 3: Reforzar territorio propio
+    else if (isOwnTerritory && targetTerritory) {
       const newRequiredPace = calculateRequiredPace(avgPace, userLevel)
       const { data: updated } = await supabaseAdmin
         .from('territories')
@@ -925,15 +1235,42 @@ Deno.serve(async (req) => {
           total_distance: profileState.total_distance,
         })
         .eq('id', user.id)
-    } else if (isNewTerritory) {
+    }
+    // CASO 4: Nuevo territorio (con posible solapamiento parcial)
+    else if (isNewTerritory) {
+      let finalPath = path
+      let finalArea = area
+      
+      // Si hay solapamientos parciales con territorios ajenos, calcular la diferencia
+      if (hasPartialOverlap) {
+        const otherPolygons = overlappingTerritories
+          .filter(ot => ot.territory.user_id !== user.id)
+          .map(ot => ot.polygon)
+        
+        if (otherPolygons.length > 0) {
+          try {
+            const adjustedPolygon = calculatePolygonDifference(runPolygon, otherPolygons)
+            if (adjustedPolygon && adjustedPolygon.geometry) {
+              const adjustedArea = turfArea(adjustedPolygon)
+              if (adjustedArea >= MINIMUM_AREA_M2) {
+                finalPath = adjustedPolygon.geometry.coordinates[0].map((c: number[]) => ({ lng: c[0], lat: c[1] }))
+                finalArea = adjustedArea
+              }
+            }
+          } catch (e) {
+            console.warn('Error ajustando polígono por solapamiento:', e)
+          }
+        }
+      }
+      
       const requiredPace = calculateRequiredPace(avgPace, userLevel)
       const { data: inserted, error: insertError } = await supabaseAdmin
         .from('territories')
         .insert({
           user_id: user.id,
-          coordinates: path,
-          area,
-          perimeter,
+          coordinates: finalPath,
+          area: finalArea,
+          perimeter: calculatePerimeter(finalPath),
           avg_pace: avgPace,
           required_pace: requiredPace,
           protected_until: protectedUntil,
@@ -947,6 +1284,7 @@ Deno.serve(async (req) => {
         .single()
 
       if (insertError || !inserted) {
+        console.error('Error insertando territorio:', insertError)
         throw new Error('No se pudo crear el territorio')
       }
       territoryId = inserted.id
@@ -1020,7 +1358,7 @@ Deno.serve(async (req) => {
       .from('runs')
       .insert({
         user_id: user.id,
-        path: path as any,
+        path: payload.path as any, // Guardar path original
         distance,
         duration: payload.duration,
         avg_pace: avgPace,
@@ -1041,7 +1379,7 @@ Deno.serve(async (req) => {
         .insert({
           territory_id: territoryId,
           attacker_id: user.id,
-          defender_id: targetTerritory?.user_id,
+          defender_id: targetTerritory?.user_id || containingTerritory?.territory?.user_id,
           event_type: action === 'stolen' ? 'steal' : action === 'reinforced' ? 'reinforce' : 'conquest',
           result: action === 'reinforced' ? 'neutral' : 'success',
           overlap_ratio: highestOverlap || 1,
