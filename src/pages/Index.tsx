@@ -339,13 +339,13 @@ const Index = () => {
         syncRuns={syncRuns}
       />
 
-      {/* Mobile / Tablet: Full page sections */}
-      <div className="lg:hidden">
+      {/* Mobile / Tablet (hasta xl): Full page sections */}
+      <div className="xl:hidden">
         {renderMobileContent()}
       </div>
 
       {/* Desktop: Keep existing behavior */}
-      <div className="hidden lg:block">
+      <div className="hidden xl:block">
         <main className="pt-16 h-screen relative">
           <MapView
             runPath={runPath}

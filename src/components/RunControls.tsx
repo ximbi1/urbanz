@@ -51,7 +51,7 @@ const RunControls = ({
   };
 
   return (
-    <Card className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 p-3 md:p-4 bg-card/95 backdrop-blur-sm border-glow z-[60] w-[95vw] md:w-auto shadow-xl">
+    <Card className="fixed bottom-28 md:bottom-20 xl:bottom-6 left-1/2 -translate-x-1/2 p-3 md:p-4 bg-card/95 backdrop-blur-sm border-glow z-[60] w-[95vw] md:w-auto shadow-xl">
       <div className="flex items-center justify-center gap-2 md:gap-4 flex-wrap md:flex-nowrap">
         {!isRunning ? (
           <>
