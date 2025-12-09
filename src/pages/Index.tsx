@@ -27,6 +27,7 @@ const UserProfile = lazy(() => import('@/components/UserProfile'));
 const ImportRun = lazy(() => import('@/components/ImportRun').then(m => ({ default: m.ImportRun })));
 const RunHistory = lazy(() => import('@/components/RunHistory').then(m => ({ default: m.RunHistory })));
 const Clans = lazy(() => import('@/components/Clans'));
+const Notifications = lazy(() => import('@/components/Notifications'));
 
 const activityTabs = [
   { id: 'feed', label: 'Feed' },
@@ -104,6 +105,7 @@ const Index = () => {
   const [communityTab, setCommunityTab] = useState('friends');
   const [showSummary, setShowSummary] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [summaryData, setSummaryData] = useState<any>(null);
   const [viewUserProfileId, setViewUserProfileId] = useState<string | null>(null);
@@ -327,7 +329,7 @@ const Index = () => {
       )}
 
       <Header
-        onShowNotifications={() => setActiveSection('you')}
+        onShowNotifications={() => setShowNotifications(true)}
       />
 
       <OfflineBanner 
@@ -452,6 +454,12 @@ const Index = () => {
           avgSpeed={summaryData.avgSpeed}
           onClose={handleCloseSummary}
         />
+      )}
+
+      {showNotifications && (
+        <Suspense fallback={<SectionLoader />}>
+          <Notifications onClose={() => setShowNotifications(false)} isMobileFullPage />
+        </Suspense>
       )}
 
       <Toaster />
