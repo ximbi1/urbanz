@@ -344,7 +344,7 @@ const Index = () => {
         {renderMobileContent()}
       </div>
 
-      {/* Desktop: Keep existing behavior */}
+      {/* Desktop: Keep existing behavior (solo xl en adelante) */}
       <div className="hidden xl:block">
         <main className="pt-16 h-screen relative">
           <MapView
@@ -386,7 +386,7 @@ const Index = () => {
         )}
       </Suspense>
       
-      <div className="hidden md:block">
+      <div className="hidden xl:block">
         <Suspense fallback={<SectionLoader />}>
           {activeSection === 'you' && (
             <Profile 
