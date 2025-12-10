@@ -1,10 +1,12 @@
-import { Trophy, MapPin, Timer, TrendingUp, Zap, Activity, Flame, Gauge, Share2 } from 'lucide-react';
+import { Trophy, MapPin, Timer, TrendingUp, Zap, Activity, Flame, Gauge, Share2, Navigation } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ShareConquest } from './ShareConquest';
 import { useState } from 'react';
 import { Run } from '@/types/territory';
+import { Coordinate } from '@/types/territory';
+import { calculateDistance } from '@/utils/geoCalculations';
 
 interface RunSummaryProps {
   conquered: number;
@@ -16,6 +18,7 @@ interface RunSummaryProps {
   avgPace: number;
   avgSpeed: number;
   onClose: () => void;
+  path?: Coordinate[];
 }
 
 const RunSummary = ({
@@ -27,6 +30,7 @@ const RunSummary = ({
   duration,
   avgPace,
   avgSpeed,
+  path,
   onClose,
 }: RunSummaryProps) => {
   const [showShare, setShowShare] = useState(false);
@@ -59,6 +63,32 @@ const RunSummary = ({
     return Math.round(distanceKm * weightKg * 0.75);
   };
 
+  const computeSplits = (pathCoords: Coordinate[]) => {
+    if (!path || path.length < 2) return [];
+    const splits: { km: number; time: number; pace: number }[] = [];
+    let accumDist = 0;
+    let accumTime = 0;
+    let kmCounter = 1;
+    for (let i = 1; i < path.length; i++) {
+      const segDist = calculateDistance(pathCoords[i - 1], pathCoords[i]);
+      accumDist += segDist;
+      // Repartir tiempo proporcional al tramo respecto a distancia total
+      const segTime = duration * (segDist / Math.max(distance, 1));
+      accumTime += segTime;
+      while (accumDist >= kmCounter * 1000 && distance > 0) {
+        const overshoot = accumDist - kmCounter * 1000;
+        const ratio = segDist > 0 ? (segDist - overshoot) / segDist : 0;
+        const splitTime = accumTime - overshoot * (duration / Math.max(distance, 1));
+        const pace = (splitTime / 60) / 1; // min/km
+        splits.push({ km: kmCounter, time: splitTime, pace });
+        kmCounter++;
+      }
+    }
+    return splits;
+  };
+
+  const splits = computeSplits(path || []);
+
   // Crear objeto Run para compartir
   const runData: Run = {
     id: Date.now().toString(),
@@ -66,7 +96,7 @@ const RunSummary = ({
     distance,
     duration,
     avgPace,
-    path: [],
+    path: path || [],
     territoriesConquered: conquered,
     territoriesStolen: stolen,
     territoriesLost: lost,
@@ -118,6 +148,27 @@ const RunSummary = ({
         </div>
 
         <Separator />
+
+        {/* Parciales por km */}
+        {splits.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+              <Navigation className="w-4 h-4" />
+              Parciales (cada km)
+            </h3>
+            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+              {splits.map((split) => (
+                <Card key={split.km} className="p-3 bg-muted/20 border-border text-sm flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">Km {split.km}</div>
+                    <div className="text-muted-foreground text-xs">Pace: {formatPace(split.pace)}</div>
+                  </div>
+                  <div className="font-semibold">{formatTime(Math.round(split.time))}</div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Estadísticas principales */}
         <div>

@@ -459,6 +459,7 @@ const Index = () => {
           duration={summaryData.duration}
           avgPace={summaryData.avgPace}
           avgSpeed={summaryData.avgSpeed}
+          path={summaryData.run?.path}
           onClose={handleCloseSummary}
         />
       )}
