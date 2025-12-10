@@ -36,6 +36,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const challengeMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapPois, setMapPois] = useState<MapPoi[]>([]);
   const poiMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const parkMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [selectedChallenge, setSelectedChallenge] = useState<MapChallenge | null>(null);
   const [challengeTargets, setChallengeTargets] = useState<Set<string>>(new Set());
@@ -163,6 +164,8 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       challengeMarkersRef.current = [];
       poiMarkersRef.current.forEach(marker => marker.remove());
       poiMarkersRef.current = [];
+      parkMarkersRef.current.forEach(marker => marker.remove());
+      parkMarkersRef.current = [];
       if (userMarkerRef.current) userMarkerRef.current.remove();
       if (userAccuracyRef.current && map.current?.getSource('user-accuracy')) {
         if (map.current.getLayer('user-accuracy')) {
@@ -849,9 +852,13 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     });
   }, [explorerRoutes, playerSettings?.explorerMode]);
 
-  // Renderizar parques como polígonos cuando se habilita el filtro
+  // Renderizar parques como polígonos y marcadores cuando se habilita el filtro
   useEffect(() => {
     if (!map.current || !map.current.isStyleLoaded()) return;
+
+    // Limpiar marcadores de parques existentes
+    parkMarkersRef.current.forEach(marker => marker.remove());
+    parkMarkersRef.current = [];
 
     if (map.current.getLayer('parks-highlight')) map.current.removeLayer('parks-highlight');
     if (map.current.getLayer('parks-outline')) map.current.removeLayer('parks-outline');
@@ -944,6 +951,42 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       },
     });
 
+    // Crear marcadores de iconos para cada parque
+    features.forEach(feature => {
+      const coords = feature.geometry.coordinates[0];
+      const bounds = new mapboxgl.LngLatBounds(
+        [coords[0][0], coords[0][1]],
+        [coords[0][0], coords[0][1]]
+      );
+      coords.forEach((c: number[]) => bounds.extend([c[0], c[1]]));
+      const center = bounds.getCenter();
+
+      const el = document.createElement('div');
+      el.style.width = '28px';
+      el.style.height = '28px';
+      el.style.borderRadius = '999px';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      el.style.background = 'rgba(34,197,94,0.85)';
+      el.style.color = '#fff';
+      el.style.fontSize = '16px';
+      el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.3)';
+      el.style.cursor = 'pointer';
+      el.innerHTML = '🌳';
+
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setSelectedParkId((prev) => (prev === feature.properties.id ? null : feature.properties.id));
+      });
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([center.lng, center.lat])
+        .addTo(map.current!);
+
+      parkMarkersRef.current.push(marker);
+    });
+
     const handleParkClick = (e: mapboxgl.MapLayerMouseEvent) => {
       const feature = e.features && e.features[0];
       if (!feature) return;
@@ -1007,23 +1050,31 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     });
   }, [mapChallenges, mapReady, showChallenges]);
 
+  // Renderizar marcadores de POIs (fountains y districts solamente)
+  // Los parques se muestran como polígonos, no como marcadores
   useEffect(() => {
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
     poiMarkersRef.current.forEach(marker => marker.remove());
     poiMarkersRef.current = [];
-    if (!showParks && !showFountains && !showDistricts) return;
+    
+    // Solo procesar fuentes y distritos con marcadores
+    // Los parques usan polígonos (outline) en lugar de marcadores
+    if (!showFountains && !showDistricts) return;
+    
     const iconMap: Record<string, string> = {
-      park: '🌳',
       fountain: '🚰',
       district: '🗺️',
     };
+    
     mapPois.forEach(poi => {
-      if (poi.category !== 'park' && poi.category !== 'fountain' && poi.category !== 'district') {
-        return;
-      }
-      if (poi.category === 'park' && !showParks) return;
+      // Los parques NO se muestran como marcadores - usan polígonos
+      if (poi.category === 'park') return;
+      // Solo mostrar fuentes si el filtro está activado
       if (poi.category === 'fountain' && !showFountains) return;
+      // Solo mostrar distritos si el filtro está activado
       if (poi.category === 'district' && !showDistricts) return;
+      // Saltar categorías desconocidas
+      if (!['fountain', 'district'].includes(poi.category)) return;
 
       const el = document.createElement('div');
       el.style.width = '28px';
@@ -1048,13 +1099,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         });
       }
 
-      if (poi.category === 'park') {
-        el.style.background = 'rgba(34,197,94,0.85)';
-        el.addEventListener('click', (event) => {
-          event.stopPropagation();
-          setSelectedParkId((prev) => (prev === poi.id ? null : poi.id));
-        });
-      }
+      // Los parques se manejan como polígonos, no marcadores
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([centroid.lng, centroid.lat])
@@ -1073,7 +1118,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
 
       poiMarkersRef.current.push(marker);
     });
-  }, [mapPois, mapReady, showParks, showFountains, showDistricts]);
+  }, [mapPois, mapReady, showFountains, showDistricts]);
 
   useEffect(() => {
     if (!showDistricts) {
