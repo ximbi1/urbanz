@@ -1,69 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Refined dark theme - more sophisticated, less harsh */
-    --background: 225 25% 6%;
-    --foreground: 210 20% 95%;
+    /* Athletic Track Theme - Professional Running App */
+    --background: 220 20% 8%;
+    --foreground: 210 15% 95%;
     
-    --card: 225 20% 10%;
-    --card-foreground: 210 20% 95%;
+    --card: 220 18% 12%;
+    --card-foreground: 210 15% 95%;
     
-    --popover: 225 20% 10%;
-    --popover-foreground: 210 20% 95%;
+    --popover: 220 18% 12%;
+    --popover-foreground: 210 15% 95%;
     
-    /* Softer purple - less saturated, more elegant */
-    --primary: 270 65% 58%;
-    --primary-foreground: 210 20% 98%;
+    /* Track Orange - Primary */
+    --primary: 18 100% 60%;
+    --primary-foreground: 220 20% 8%;
     
-    /* Cyan accent - refined */
-    --secondary: 185 55% 48%;
-    --secondary-foreground: 225 25% 6%;
+    /* Athletic Blue - Secondary */
+    --secondary: 213 55% 24%;
+    --secondary-foreground: 210 15% 95%;
     
-    --muted: 225 18% 16%;
-    --muted-foreground: 220 15% 55%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 12% 55%;
     
-    /* Accent pink - softer */
-    --accent: 330 55% 55%;
-    --accent-foreground: 210 20% 98%;
+    /* Energy Green - Accent */
+    --accent: 160 84% 39%;
+    --accent-foreground: 220 20% 8%;
     
-    --destructive: 0 65% 50%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 15% 95%;
     
-    /* Softer borders */
-    --border: 225 15% 18%;
-    --input: 225 15% 18%;
-    --ring: 270 65% 58%;
+    /* Clean borders */
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 18 100% 60%;
     
-    --radius: 0.625rem;
+    --radius: 0.75rem;
     
-    --success: 150 55% 45%;
-    --warning: 45 85% 55%;
-    --territory-owned: 270 60% 55%;
-    --territory-other: 200 55% 50%;
+    /* Status colors */
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
     
-    --sidebar-background: 225 20% 10%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 270 65% 58%;
-    --sidebar-primary-foreground: 210 20% 98%;
-    --sidebar-accent: 225 18% 16%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 225 15% 18%;
-    --sidebar-ring: 270 65% 58%;
+    /* Territory colors */
+    --territory-owned: 18 100% 55%;
+    --territory-other: 217 91% 60%;
+    
+    /* Sidebar */
+    --sidebar-background: 220 18% 12%;
+    --sidebar-foreground: 210 15% 95%;
+    --sidebar-primary: 18 100% 60%;
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 210 15% 95%;
+    --sidebar-border: 220 12% 20%;
+    --sidebar-ring: 18 100% 60%;
   }
 }
 
-/* Animación de pulso para el marcador del usuario */
+/* User location marker pulse - Orange track color */
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 0 0 rgba(59, 130, 246, 0.7);
+    box-shadow: 0 0 15px hsl(18 100% 60% / 0.7), 0 0 0 0 hsl(18 100% 60% / 0.5);
   }
   50% {
-    box-shadow: 0 0 30px rgba(59, 130, 246, 1), 0 0 0 15px rgba(59, 130, 246, 0);
+    box-shadow: 0 0 25px hsl(18 100% 60% / 0.9), 0 0 0 12px hsl(18 100% 60% / 0);
   }
 }
 
@@ -76,35 +78,45 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
+    @apply font-display font-semibold tracking-tight;
   }
 }
 
 @layer utilities {
   .font-display {
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Manrope', sans-serif;
   }
   .font-sans {
     font-family: 'Inter', sans-serif;
   }
   
-  /* Refined glow effects - more subtle */
-  .glow-primary {
-    text-shadow: 0 0 12px hsl(var(--primary) / 0.35);
+  /* Modern elevation shadows - replaces glow effects */
+  .shadow-elevated {
+    box-shadow: 0 4px 12px -2px hsl(var(--background) / 0.4),
+                0 2px 6px -2px hsl(var(--background) / 0.3);
   }
   
-  .border-glow {
-    box-shadow: 0 0 8px hsl(var(--primary) / 0.15);
+  .shadow-card {
+    box-shadow: 0 1px 3px hsl(var(--background) / 0.3),
+                0 1px 2px -1px hsl(var(--background) / 0.3);
   }
 
-  /* Subtle card elevation */
-  .card-elevated {
-    box-shadow: 0 4px 20px -4px hsl(var(--background) / 0.5),
-                0 0 0 1px hsl(var(--border) / 0.5);
+  /* Subtle gradient for primary buttons */
+  .btn-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(18 100% 52%) 100%);
+  }
+
+  /* Card hover effect */
+  .card-interactive {
+    @apply transition-all duration-200;
+  }
+  .card-interactive:hover {
+    @apply shadow-elevated;
+    transform: translateY(-1px);
   }
 
   .safe-area-bottom {

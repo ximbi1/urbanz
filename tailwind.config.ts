@@ -61,7 +61,7 @@ export default {
         warning: "hsl(var(--warning))",
       },
       fontFamily: {
-        display: ['Orbitron', 'sans-serif'],
+        display: ['Manrope', 'sans-serif'],
         sans: ['Inter', 'sans-serif'],
       },
       borderRadius: {
