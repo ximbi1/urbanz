@@ -47,11 +47,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [showDistricts, setShowDistricts] = useState(false);
   const [districtFeatures, setDistrictFeatures] = useState<any[]>([]);
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(null);
+  const [selectedParkId, setSelectedParkId] = useState<string | null>(null);
   const [selectedTerritory, setSelectedTerritory] = useState<any>(null);
+  const [parkFeatures, setParkFeatures] = useState<any[]>([]);
   const selectedDistrict = useMemo(() => {
     if (!selectedDistrictId) return null;
     return districtFeatures.find((feature) => feature.properties?.id === selectedDistrictId) || null;
   }, [districtFeatures, selectedDistrictId]);
+  const selectedPark = useMemo(() => {
+    if (!selectedParkId) return null;
+    return parkFeatures.find((feature) => feature.properties?.id === selectedParkId) || null;
+  }, [parkFeatures, selectedParkId]);
   const { user } = useAuth();
   const { settings: playerSettings, loading: settingsLoading } = usePlayerSettings();
   const [explorerRoutes, setExplorerRoutes] = useState<{ id: string; path: Coordinate[]; created_at?: string | null }[]>([]);
@@ -847,13 +853,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   useEffect(() => {
     if (!map.current || !map.current.isStyleLoaded()) return;
 
-    if (map.current.getLayer('parks-fill')) map.current.removeLayer('parks-fill');
+    if (map.current.getLayer('parks-highlight')) map.current.removeLayer('parks-highlight');
     if (map.current.getLayer('parks-outline')) map.current.removeLayer('parks-outline');
     if (map.current.getSource('parks')) map.current.removeSource('parks');
 
-    if (!showParks) return;
+    if (!showParks) {
+      setSelectedParkId(null);
+      setParkFeatures([]);
+      return;
+    }
 
-    const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
+    const isPointInPolygonLocal = (point: Coordinate, polygon: Coordinate[]) => {
       let inside = false;
       for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         const xi = polygon[i].lng;
@@ -868,10 +878,11 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       return inside;
     };
 
-    const parkFeatures = mapPois
+    const features = mapPois
       .filter(poi => poi.category === 'park' && poi.coordinates?.length)
       .map(poi => {
         const perimeter = calculatePerimeter(poi.coordinates);
+        const area = calculatePolygonArea(poi.coordinates);
         const bounds = new mapboxgl.LngLatBounds(
           [poi.coordinates[0].lng, poi.coordinates[0].lat],
           [poi.coordinates[0].lng, poi.coordinates[0].lat]
@@ -879,11 +890,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         poi.coordinates.forEach(c => bounds.extend([c.lng, c.lat]));
         const center = bounds.getCenter();
         const centroid: Coordinate = { lat: center.lat, lng: center.lng };
-        const ownerTerritory = territories.find(t => isPointInPolygon(centroid, t.coordinates));
+        const ownerTerritory = territories.find(t => isPointInPolygonLocal(centroid, t.coordinates));
 
         return {
           type: 'Feature' as const,
-          properties: { name: poi.name, perimeter, owner: ownerTerritory?.owner || null },
+          properties: { 
+            id: poi.id, 
+            name: poi.name, 
+            perimeter, 
+            area, 
+            owner: ownerTerritory?.owner || null 
+          },
           geometry: {
             type: 'Polygon' as const,
             coordinates: [poi.coordinates.map(c => [c.lng, c.lat])],
@@ -891,69 +908,60 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         };
       });
 
-    if (!parkFeatures.length) return;
+    setParkFeatures(features);
+
+    if (!features.length) return;
 
     map.current.addSource('parks', {
       type: 'geojson',
       data: {
         type: 'FeatureCollection',
-        features: parkFeatures,
+        features: features,
       },
     });
 
-    map.current.addLayer({
-      id: 'parks-fill',
-      type: 'fill',
-      source: 'parks',
-      paint: {
-        'fill-color': '#22c55e',
-        'fill-opacity': 0.12,
-      },
-    });
-
+    // Solo contorno, sin relleno verde
     map.current.addLayer({
       id: 'parks-outline',
       type: 'line',
       source: 'parks',
       paint: {
         'line-color': '#22c55e',
-        'line-width': 1.5,
+        'line-width': 2,
         'line-opacity': 0.8,
       },
     });
 
-    const parkClickHandler = (e: mapboxgl.MapMouseEvent) => {
-      if (!e.features || !e.features[0]) return;
-      const props: any = e.features[0].properties;
-      const name = props.name || 'Parque';
-      const perimeter = props.perimeter ? Number(props.perimeter) : 0;
-      const owner = props.owner;
-      new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`
-          <div style="min-width: 180px;">
-            <p style="font-weight:600;margin-bottom:4px;">${name}</p>
-            <p style="font-size:12px;color:#475569;margin-bottom:6px;">Parque incluido en el mapa.</p>
-            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-              <span>🌳</span>
-              <span>${name}</span>
-            </div>
-            <div style="font-size:12px;margin-top:6px;">Perímetro: ${formatPerimeter(perimeter)}</div>
-            ${owner ? `<div style="font-size:12px;margin-top:4px;">Pertenece a: <strong>${owner}</strong></div>` : '<div style="font-size:12px;margin-top:4px;">Disponible</div>'}
-          </div>
-        `)
-        .addTo(map.current!);
+    // Capa de highlight cuando se selecciona
+    map.current.addLayer({
+      id: 'parks-highlight',
+      type: 'fill',
+      source: 'parks',
+      filter: ['==', ['get', 'id'], ''],
+      paint: {
+        'fill-color': 'rgba(34, 197, 94, 0.25)',
+        'fill-outline-color': 'rgba(34, 197, 94, 0.4)',
+      },
+    });
+
+    const handleParkClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      const feature = e.features && e.features[0];
+      if (!feature) return;
+      const id = feature.properties?.id as string | undefined;
+      if (!id) return;
+      setSelectedParkId((prev) => (prev === id ? null : id));
     };
 
-    map.current.on('click', 'parks-fill', parkClickHandler);
-    map.current.on('click', 'parks-outline', parkClickHandler);
+    map.current.on('click', 'parks-outline', handleParkClick);
+    map.current.on('click', 'parks-highlight', handleParkClick);
 
     return () => {
-      if (!map.current) return;
-      map.current.off('click', 'parks-fill', parkClickHandler);
-      map.current.off('click', 'parks-outline', parkClickHandler);
+      if (map.current) {
+        map.current.off('click', 'parks-outline', handleParkClick);
+        map.current.off('click', 'parks-highlight', handleParkClick);
+      }
     };
-  }, [showParks, mapPois]);
+  }, [showParks, mapPois, territories]);
 
   useEffect(() => {
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
@@ -1040,6 +1048,14 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         });
       }
 
+      if (poi.category === 'park') {
+        el.style.background = 'rgba(34,197,94,0.85)';
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          setSelectedParkId((prev) => (prev === poi.id ? null : poi.id));
+        });
+      }
+
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([centroid.lng, centroid.lat])
         .addTo(map.current!);
@@ -1050,15 +1066,6 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
             <p style="font-weight:600;margin-bottom:4px;">${poi.name}</p>
             <p style="font-size:12px;color:#475569;margin-bottom:6px;">Punto de agua potable</p>
             <p style="font-size:12px;">Ideal para recargar agua durante la ruta.</p>
-          </div>
-        `;
-        marker.setPopup(new mapboxgl.Popup().setHTML(popupHtml));
-      } else if (poi.category === 'park') {
-        const popupHtml = `
-          <div style="min-width: 180px;color:#0f172a;">
-            <p style="font-weight:600;margin-bottom:4px;">${poi.name}</p>
-            <p style="font-size:12px;color:#475569;margin-bottom:6px;">Zona temática</p>
-            <p style="font-size:12px;">Rodea el perímetro para etiquetar tus territorios con este parque.</p>
           </div>
         `;
         marker.setPopup(new mapboxgl.Popup().setHTML(popupHtml));
@@ -1163,6 +1170,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       map.current.setFilter('districts-highlight', ['==', ['get', 'id'], selectedDistrictId]);
     }
   }, [selectedDistrictId, showDistricts]);
+
+  // Update parks highlight filter when selectedParkId changes
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    if (!map.current.getLayer('parks-highlight')) return;
+    if (!showParks || !selectedParkId) {
+      map.current.setFilter('parks-highlight', ['==', ['get', 'id'], '']);
+    } else {
+      map.current.setFilter('parks-highlight', ['==', ['get', 'id'], selectedParkId]);
+    }
+  }, [selectedParkId, showParks]);
 
   const formatDuration = (milliseconds: number) => {
     const totalMinutes = Math.floor(milliseconds / (60 * 1000));
@@ -1490,6 +1508,43 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
             </div>
             <div className="mt-4 text-xs text-muted-foreground">
               Rodea todo el contorno resaltado para reclamar el distrito completo. Usa escudos si quieres mantenerlo protegido.
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showParks && selectedPark && (
+        <div className="absolute bottom-4 left-4 z-[80] max-w-sm animate-fade-in">
+          <Card className="p-4 bg-background/95 shadow-elevated">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">Parque seleccionado</p>
+                <h4 className="text-lg font-display font-semibold text-green-500">{selectedPark.properties?.name}</h4>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedParkId(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Área aproximada</span>
+                <span className="font-semibold">
+                  {formatAreaValue(selectedPark.properties?.area || 0)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Perímetro</span>
+                <span className="font-semibold">{formatDistance(selectedPark.properties?.perimeter || 0)}</span>
+              </div>
+              {selectedPark.properties?.owner && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Propietario actual</span>
+                  <span className="font-semibold">{selectedPark.properties.owner}</span>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 text-xs text-muted-foreground">
+              Rodea todo el perímetro del parque para conquistarlo. Los territorios dentro de este parque se etiquetarán automáticamente.
             </div>
           </Card>
         </div>
