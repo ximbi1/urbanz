@@ -885,6 +885,12 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       return inside;
     };
 
+    // Función para verificar si un polígono está completamente contenido en otro
+    const isPolygonFullyContained = (inner: Coordinate[], outer: Coordinate[]) => {
+      if (inner.length < 3 || outer.length < 3) return false;
+      return inner.every((point) => isPointInPolygonLocal(point, outer));
+    };
+
     const features = mapPois
       .filter(poi => poi.category === 'park' && poi.coordinates?.length)
       .map(poi => {
@@ -897,7 +903,9 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         poi.coordinates.forEach(c => bounds.extend([c.lng, c.lat]));
         const center = bounds.getCenter();
         const centroid: Coordinate = { lat: center.lat, lng: center.lng };
-        const ownerTerritory = territories.find(t => isPointInPolygonLocal(centroid, t.coordinates));
+        
+        // Solo asignar propietario si el territorio contiene COMPLETAMENTE el parque
+        const ownerTerritory = territories.find(t => isPolygonFullyContained(poi.coordinates, t.coordinates));
 
         return {
           type: 'Feature' as const,
@@ -906,6 +914,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
             name: poi.name, 
             perimeter, 
             area, 
+            centroid,
             owner: ownerTerritory?.owner || null 
           },
           geometry: {
