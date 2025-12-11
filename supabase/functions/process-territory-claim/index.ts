@@ -360,6 +360,93 @@ const derivePoiTags = (runPolygon: any, pois: any[]) => {
   return Array.from(uniq.values())
 }
 
+// Verificar si el usuario ha conquistado algún parque rodeándolo completamente
+const checkParkConquests = async (
+  userId: string,
+  runPolygon: any,
+  pois: any[],
+  runId: string | null
+): Promise<{ conquered: string[]; stolen: string[] }> => {
+  const result = { conquered: [] as string[], stolen: [] as string[] }
+  
+  const parks = pois.filter(poi => poi.category === 'park')
+  if (!parks.length) return result
+
+  for (const park of parks) {
+    const coords = (park.coordinates as any[])?.map((coord) => [coord.lng, coord.lat])
+    if (!coords || coords.length < 3) continue
+
+    try {
+      // Cerrar el polígono del parque si no está cerrado
+      const closedCoords = [...coords]
+      if (closedCoords[0][0] !== closedCoords[closedCoords.length - 1][0] ||
+          closedCoords[0][1] !== closedCoords[closedCoords.length - 1][1]) {
+        closedCoords.push(closedCoords[0])
+      }
+      
+      const parkPolygon = polygon([closedCoords])
+      
+      // Verificar si el runPolygon CONTIENE completamente el parque
+      if (!booleanContains(runPolygon, parkPolygon)) continue
+
+      console.log(`Park ${park.name} (${park.id}) is fully contained in user's run polygon`)
+
+      // Verificar si el parque ya tiene propietario
+      const { data: existingConquest } = await supabaseAdmin
+        .from('park_conquests')
+        .select('id, user_id, profiles:user_id(username)')
+        .eq('park_id', park.id)
+        .maybeSingle()
+
+      if (existingConquest) {
+        if (existingConquest.user_id === userId) {
+          // El usuario ya es propietario, no hacer nada
+          continue
+        }
+        // Robar el parque al propietario anterior
+        await supabaseAdmin
+          .from('park_conquests')
+          .update({ 
+            user_id: userId, 
+            conquered_at: new Date().toISOString(),
+            run_id: runId 
+          })
+          .eq('id', existingConquest.id)
+        
+        const prevOwner = (existingConquest.profiles as any)?.username || 'Alguien'
+        result.stolen.push(park.name)
+        console.log(`Park ${park.name} stolen from ${prevOwner}`)
+
+        // Notificar al propietario anterior
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            user_id: existingConquest.user_id,
+            type: 'park_lost',
+            title: '🌳 Parque perdido',
+            message: `Han conquistado tu parque "${park.name}"`,
+            related_id: park.id,
+          })
+      } else {
+        // Nuevo parque conquistado
+        await supabaseAdmin
+          .from('park_conquests')
+          .insert({
+            park_id: park.id,
+            user_id: userId,
+            run_id: runId,
+          })
+        result.conquered.push(park.name)
+        console.log(`Park ${park.name} conquered for the first time`)
+      }
+    } catch (e) {
+      console.warn('Error checking park conquest:', park.name, e)
+    }
+  }
+
+  return result
+}
+
 const fetchActiveMapChallenges = async () => {
   const now = new Date().toISOString()
   const { data } = await supabaseAdmin
@@ -1017,6 +1104,8 @@ Deno.serve(async (req) => {
     let clanMissionsCompleted: string[] = []
     let missionRewardPoints = 0
     let missionRewardShields = 0
+    let parksConquered: string[] = []
+    let parksStolen: string[] = []
 
     // CASO 1 y 2: Robo (parcial o alto solapamiento) sin tomar el 100% del territorio
     const rewardPoints = calculateRewardPoints(distance, area, Boolean(isStealAttempt || isPartialStealAttempt || isInnerConquest))
@@ -1496,6 +1585,23 @@ Deno.serve(async (req) => {
 
     runId = run?.id || null
 
+    // Verificar conquistas de parques (rodear completamente un parque)
+    const parkConquestResult = await checkParkConquests(user.id, runPolygon, mapPois, runId)
+    parksConquered = parkConquestResult.conquered
+    parksStolen = parkConquestResult.stolen
+
+    if (parksConquered.length || parksStolen.length) {
+      const totalParks = parksConquered.length + parksStolen.length
+      await sendPushNotification(user.id, {
+        title: '🌳 ¡Parque conquistado!',
+        body: totalParks === 1 
+          ? `Has conquistado "${[...parksConquered, ...parksStolen][0]}"` 
+          : `Has conquistado ${totalParks} parques`,
+        data: { url: '/' },
+        tag: 'park-conquest'
+      })
+    }
+
     if (territoryId) {
       await supabaseAdmin
         .from('territory_events')
@@ -1533,6 +1639,8 @@ Deno.serve(async (req) => {
             shields: missionRewardShields,
           },
           clanMissionsCompleted,
+          parksConquered,
+          parksStolen,
         },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

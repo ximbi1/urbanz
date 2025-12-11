@@ -768,6 +768,52 @@ export type Database = {
         }
         Relationships: []
       }
+      park_conquests: {
+        Row: {
+          conquered_at: string
+          id: string
+          park_id: string
+          run_id: string | null
+          user_id: string
+        }
+        Insert: {
+          conquered_at?: string
+          id?: string
+          park_id: string
+          run_id?: string | null
+          user_id: string
+        }
+        Update: {
+          conquered_at?: string
+          id?: string
+          park_id?: string
+          run_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "park_conquests_park_id_fkey"
+            columns: ["park_id"]
+            isOneToOne: true
+            referencedRelation: "map_pois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "park_conquests_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "park_conquests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
