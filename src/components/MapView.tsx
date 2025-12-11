@@ -51,6 +51,7 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
   const [selectedParkId, setSelectedParkId] = useState<string | null>(null);
   const [selectedTerritory, setSelectedTerritory] = useState<any>(null);
   const [parkFeatures, setParkFeatures] = useState<any[]>([]);
+  const [parkConquests, setParkConquests] = useState<Map<string, { owner: string; color: string }>>(new Map());
   const selectedDistrict = useMemo(() => {
     if (!selectedDistrictId) return null;
     return districtFeatures.find((feature) => feature.properties?.id === selectedDistrictId) || null;
@@ -867,120 +868,143 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
     if (!showParks) {
       setSelectedParkId(null);
       setParkFeatures([]);
+      setParkConquests(new Map());
       return;
     }
 
-    const features = mapPois
-      .filter(poi => poi.category === 'park' && poi.coordinates?.length)
-      .map(poi => {
-        const perimeter = calculatePerimeter(poi.coordinates);
-        const area = calculatePolygonArea(poi.coordinates);
-
-        return {
-          type: 'Feature' as const,
-          properties: { 
-            id: poi.id, 
-            name: poi.name, 
-            perimeter, 
-            area
-          },
-          geometry: {
-            type: 'Polygon' as const,
-            coordinates: [poi.coordinates.map(c => [c.lng, c.lat])],
-          },
-        };
-      });
-
-    setParkFeatures(features);
-
-    if (!features.length) return;
-
-    map.current.addSource('parks', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: features,
-      },
-    });
-
-    // Solo contorno, sin relleno verde
-    map.current.addLayer({
-      id: 'parks-outline',
-      type: 'line',
-      source: 'parks',
-      paint: {
-        'line-color': '#22c55e',
-        'line-width': 2,
-        'line-opacity': 0.8,
-      },
-    });
-
-    // Capa de highlight cuando se selecciona
-    map.current.addLayer({
-      id: 'parks-highlight',
-      type: 'fill',
-      source: 'parks',
-      filter: ['==', ['get', 'id'], ''],
-      paint: {
-        'fill-color': 'rgba(34, 197, 94, 0.25)',
-        'fill-outline-color': 'rgba(34, 197, 94, 0.4)',
-      },
-    });
-
-    // Crear marcadores de iconos para cada parque
-    features.forEach(feature => {
-      const coords = feature.geometry.coordinates[0];
-      const bounds = new mapboxgl.LngLatBounds(
-        [coords[0][0], coords[0][1]],
-        [coords[0][0], coords[0][1]]
-      );
-      coords.forEach((c: number[]) => bounds.extend([c[0], c[1]]));
-      const center = bounds.getCenter();
-
-      const el = document.createElement('div');
-      el.style.width = '28px';
-      el.style.height = '28px';
-      el.style.borderRadius = '999px';
-      el.style.display = 'flex';
-      el.style.alignItems = 'center';
-      el.style.justifyContent = 'center';
-      el.style.background = 'rgba(34,197,94,0.85)';
-      el.style.color = '#fff';
-      el.style.fontSize = '16px';
-      el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.3)';
-      el.style.cursor = 'pointer';
-      el.innerHTML = '🌳';
-
-      el.addEventListener('click', (event) => {
-        event.stopPropagation();
-        setSelectedParkId((prev) => (prev === feature.properties.id ? null : feature.properties.id));
-      });
-
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([center.lng, center.lat])
-        .addTo(map.current!);
-
-      parkMarkersRef.current.push(marker);
-    });
-
-    const handleParkClick = (e: mapboxgl.MapLayerMouseEvent) => {
-      const feature = e.features && e.features[0];
-      if (!feature) return;
-      const id = feature.properties?.id as string | undefined;
-      if (!id) return;
-      setSelectedParkId((prev) => (prev === id ? null : id));
-    };
-
-    map.current.on('click', 'parks-outline', handleParkClick);
-    map.current.on('click', 'parks-highlight', handleParkClick);
-
-    return () => {
-      if (map.current) {
-        map.current.off('click', 'parks-outline', handleParkClick);
-        map.current.off('click', 'parks-highlight', handleParkClick);
+    // Cargar conquistas de parques
+    const loadParkConquests = async () => {
+      const { data } = await supabase
+        .from('park_conquests')
+        .select('park_id, profiles:user_id(username, color)');
+      
+      const conquests = new Map<string, { owner: string; color: string }>();
+      if (data) {
+        data.forEach((conquest: any) => {
+          conquests.set(conquest.park_id, {
+            owner: conquest.profiles?.username || 'Usuario',
+            color: conquest.profiles?.color || '#22c55e'
+          });
+        });
       }
+      setParkConquests(conquests);
+      return conquests;
     };
-  }, [showParks, mapPois, territories]);
+
+    loadParkConquests().then((conquests) => {
+      if (!map.current) return;
+
+      const features = mapPois
+        .filter(poi => poi.category === 'park' && poi.coordinates?.length)
+        .map(poi => {
+          const perimeter = calculatePerimeter(poi.coordinates);
+          const area = calculatePolygonArea(poi.coordinates);
+          const conquest = conquests.get(poi.id);
+
+          return {
+            type: 'Feature' as const,
+            properties: { 
+              id: poi.id, 
+              name: poi.name, 
+              perimeter, 
+              area,
+              owner: conquest?.owner || null,
+              ownerColor: conquest?.color || null
+            },
+            geometry: {
+              type: 'Polygon' as const,
+              coordinates: [poi.coordinates.map(c => [c.lng, c.lat])],
+            },
+          };
+        });
+
+      setParkFeatures(features);
+
+      if (!features.length) return;
+
+      map.current.addSource('parks', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features,
+        },
+      });
+
+      // Solo contorno, sin relleno verde (usa color del propietario si existe)
+      map.current.addLayer({
+        id: 'parks-outline',
+        type: 'line',
+        source: 'parks',
+        paint: {
+          'line-color': '#22c55e',
+          'line-width': 2,
+          'line-opacity': 0.8,
+        },
+      });
+
+      // Capa de highlight cuando se selecciona
+      map.current.addLayer({
+        id: 'parks-highlight',
+        type: 'fill',
+        source: 'parks',
+        filter: ['==', ['get', 'id'], ''],
+        paint: {
+          'fill-color': 'rgba(34, 197, 94, 0.25)',
+          'fill-outline-color': 'rgba(34, 197, 94, 0.4)',
+        },
+      });
+
+      // Crear marcadores de iconos para cada parque
+      features.forEach(feature => {
+        const coords = feature.geometry.coordinates[0];
+        const bounds = new mapboxgl.LngLatBounds(
+          [coords[0][0], coords[0][1]],
+          [coords[0][0], coords[0][1]]
+        );
+        coords.forEach((c: number[]) => bounds.extend([c[0], c[1]]));
+        const center = bounds.getCenter();
+
+        const el = document.createElement('div');
+        el.style.width = '28px';
+        el.style.height = '28px';
+        el.style.borderRadius = '999px';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        // Usar color del propietario si existe
+        el.style.background = feature.properties.ownerColor 
+          ? `${feature.properties.ownerColor}dd` 
+          : 'rgba(34,197,94,0.85)';
+        el.style.color = '#fff';
+        el.style.fontSize = '16px';
+        el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.3)';
+        el.style.cursor = 'pointer';
+        el.innerHTML = '🌳';
+
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          setSelectedParkId((prev) => (prev === feature.properties.id ? null : feature.properties.id));
+        });
+
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([center.lng, center.lat])
+          .addTo(map.current!);
+
+        parkMarkersRef.current.push(marker);
+      });
+
+      const handleParkClick = (e: mapboxgl.MapLayerMouseEvent) => {
+        const feature = e.features && e.features[0];
+        if (!feature) return;
+        const id = feature.properties?.id as string | undefined;
+        if (!id) return;
+        setSelectedParkId((prev) => (prev === id ? null : id));
+      };
+
+      map.current.on('click', 'parks-outline', handleParkClick);
+      map.current.on('click', 'parks-highlight', handleParkClick);
+    });
+  }, [showParks, mapPois]);
 
   useEffect(() => {
     if (!mapReady || !map.current || !map.current.isStyleLoaded()) return;
@@ -1558,8 +1582,14 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
                 <span className="font-semibold">{formatDistance(selectedPark.properties?.perimeter || 0)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Estado</span>
-                <span className="font-semibold text-muted-foreground">Sin conquistar</span>
+                <span className="text-muted-foreground">Propietario</span>
+                {selectedPark.properties?.owner ? (
+                  <span className="font-semibold" style={{ color: selectedPark.properties.ownerColor || '#22c55e' }}>
+                    {selectedPark.properties.owner}
+                  </span>
+                ) : (
+                  <span className="font-semibold text-muted-foreground">Sin conquistar</span>
+                )}
               </div>
             </div>
             <div className="mt-4 text-xs text-muted-foreground">
