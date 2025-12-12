@@ -19,9 +19,10 @@ interface MapViewProps {
   isRunning: boolean;
   currentLocation?: Coordinate | null;
   locationAccuracy?: number | null;
+  targetLocation?: Coordinate | null;
 }
 
-const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccuracy }: MapViewProps) => {
+const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccuracy, targetLocation }: MapViewProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>('');
@@ -1354,6 +1355,17 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
       markersRef.current.push(endMarker);
     }
   }, [runPath]);
+
+  // Fly to target location when provided
+  useEffect(() => {
+    if (targetLocation && map.current && mapReady) {
+      map.current.flyTo({
+        center: [targetLocation.lng, targetLocation.lat],
+        zoom: 17,
+        duration: 1500,
+      });
+    }
+  }, [targetLocation, mapReady]);
 
   const centerOnUser = () => {
     if ('geolocation' in navigator) {

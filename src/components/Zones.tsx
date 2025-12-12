@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { Coordinate } from '@/types/territory';
 import { calculatePerimeter } from '@/utils/geoCalculations';
+import { Search, Filter, MapPin } from 'lucide-react';
 
 interface ZonesProps {
   onClose: () => void;
+  onNavigateToZone?: (coordinates: Coordinate) => void;
   isMobileFullPage?: boolean;
 }
 
@@ -21,6 +24,12 @@ interface TerritoryItem {
   id: string;
   owner: string;
   coordinates: Coordinate[];
+}
+
+interface ParkConquest {
+  park_id: string;
+  user_id: string;
+  owner_name: string;
 }
 
 const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
@@ -55,12 +64,23 @@ const formatPerimeter = (meters: number) => {
   return `${Math.round(meters)} m`;
 };
 
-const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
+const formatDistance = (meters: number | null) => {
+  if (meters == null) return null;
+  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+  return `${Math.round(meters)} m`;
+};
+
+type OwnerFilter = 'all' | 'free' | 'owned';
+
+const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesProps) => {
   const [pois, setPois] = useState<PoiItem[]>([]);
   const [territories, setTerritories] = useState<TerritoryItem[]>([]);
+  const [parkConquests, setParkConquests] = useState<ParkConquest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'parks' | 'districts'>('parks');
   const [userLocation, setUserLocation] = useState<Coordinate | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
 
   useEffect(() => {
     const fetchPois = async () => {
@@ -103,7 +123,20 @@ const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
       }
     };
 
-    Promise.all([fetchPois(), fetchTerritories()]).finally(() => setLoading(false));
+    const fetchParkConquests = async () => {
+      const { data, error } = await supabase
+        .from('park_conquests')
+        .select('park_id, user_id, owner:profiles!park_conquests_user_id_fkey(username)');
+      if (!error && data) {
+        setParkConquests(data.map((pc: any) => ({
+          park_id: pc.park_id,
+          user_id: pc.user_id,
+          owner_name: pc.owner?.username || 'Desconocido',
+        })));
+      }
+    };
+
+    Promise.all([fetchPois(), fetchTerritories(), fetchParkConquests()]).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -131,11 +164,25 @@ const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
   };
 
   const rows = useMemo(() => {
+    const isParksTab = tab === 'parks';
+    
     return pois
-      .filter(p => tab === 'parks' ? p.category === 'park' : p.category === 'district')
+      .filter(p => isParksTab ? p.category === 'park' : p.category === 'district')
       .map(poi => {
         const centroid = getCentroid(poi.coordinates);
-        const owner = territories.find(t => isPointInPolygon(centroid, t.coordinates))?.owner || null;
+        
+        // For parks, check park_conquests table first
+        let owner: string | null = null;
+        if (isParksTab) {
+          const conquest = parkConquests.find(pc => pc.park_id === poi.id);
+          if (conquest) {
+            owner = conquest.owner_name;
+          }
+        } else {
+          // For districts, use territory overlap logic
+          owner = territories.find(t => isPointInPolygon(centroid, t.coordinates))?.owner || null;
+        }
+        
         const perimeter = calculatePerimeter(poi.coordinates);
         const distance = userLocation ? distanceBetween(userLocation, centroid) : null;
         return {
@@ -143,15 +190,39 @@ const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
           owner,
           perimeter,
           distance,
+          centroid,
         };
       })
+      // Apply search filter
+      .filter(row => {
+        if (!searchQuery.trim()) return true;
+        return row.name.toLowerCase().includes(searchQuery.toLowerCase());
+      })
+      // Apply owner filter
+      .filter(row => {
+        if (ownerFilter === 'all') return true;
+        if (ownerFilter === 'free') return !row.owner;
+        if (ownerFilter === 'owned') return !!row.owner;
+        return true;
+      })
+      // Sort by distance (closest first)
       .sort((a, b) => {
         if (a.distance == null && b.distance == null) return 0;
         if (a.distance == null) return 1;
         if (b.distance == null) return -1;
         return a.distance - b.distance;
       });
-  }, [pois, tab, territories, userLocation]);
+  }, [pois, tab, territories, parkConquests, userLocation, searchQuery, ownerFilter]);
+
+  const handleNavigateToZone = (centroid: Coordinate) => {
+    if (onNavigateToZone) {
+      onNavigateToZone(centroid);
+    }
+    onClose();
+  };
+
+  const freeCount = rows.filter(r => !r.owner).length;
+  const ownedCount = rows.filter(r => r.owner).length;
 
   return (
     <div className={`w-full ${isMobileFullPage ? 'min-h-screen bg-background' : ''} px-4 py-4 space-y-3`}>
@@ -160,6 +231,7 @@ const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
         <Button variant="ghost" onClick={onClose}>Cerrar</Button>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-2">
         <Button variant={tab === 'parks' ? 'default' : 'secondary'} onClick={() => setTab('parks')}>
           Parques
@@ -169,26 +241,82 @@ const Zones = ({ onClose, isMobileFullPage = false }: ZonesProps) => {
         </Button>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder={`Buscar ${tab === 'parks' ? 'parque' : 'barrio'}...`}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Filter buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <Button
+          size="sm"
+          variant={ownerFilter === 'all' ? 'default' : 'outline'}
+          onClick={() => setOwnerFilter('all')}
+          className="text-xs"
+        >
+          <Filter className="h-3 w-3 mr-1" />
+          Todos ({rows.length + (ownerFilter !== 'all' ? (ownerFilter === 'free' ? ownedCount : freeCount) : 0)})
+        </Button>
+        <Button
+          size="sm"
+          variant={ownerFilter === 'free' ? 'default' : 'outline'}
+          onClick={() => setOwnerFilter('free')}
+          className="text-xs text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10"
+        >
+          Libres ({ownerFilter === 'all' ? freeCount : ownerFilter === 'free' ? rows.length : freeCount})
+        </Button>
+        <Button
+          size="sm"
+          variant={ownerFilter === 'owned' ? 'default' : 'outline'}
+          onClick={() => setOwnerFilter('owned')}
+          className="text-xs text-amber-400 border-amber-500/50 hover:bg-amber-500/10"
+        >
+          Ocupados ({ownerFilter === 'all' ? ownedCount : ownerFilter === 'owned' ? rows.length : ownedCount})
+        </Button>
+      </div>
+
       {loading ? (
         <div className="text-muted-foreground text-sm">Cargando zonas...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-muted-foreground text-sm py-8 text-center">
+          No se encontraron {tab === 'parks' ? 'parques' : 'barrios'} con los filtros seleccionados.
+        </div>
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <Card key={row.id} className="p-3 bg-muted/30 border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{row.name}</p>
-                  <p className="text-xs text-muted-foreground">Perímetro: {formatPerimeter(row.perimeter)}</p>
-                  {row.distance != null && (
-                    <p className="text-xs text-muted-foreground">A {row.distance >= 1000 ? (row.distance / 1000).toFixed(2) + ' km' : Math.round(row.distance) + ' m'}</p>
-                  )}
+            <Card key={row.id} className="p-3 bg-muted/30 border-border hover:bg-muted/50 transition-colors">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">{row.name}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                    <span>Perímetro: {formatPerimeter(row.perimeter)}</span>
+                    {row.distance != null && (
+                      <span className="text-primary">A {formatDistance(row.distance)}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm font-semibold">
-                  {row.owner ? `Pertenece a ${row.owner}` : 'Disponible'}
+                <div className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap ${
+                  row.owner 
+                    ? 'bg-amber-500/20 text-amber-400' 
+                    : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {row.owner ? row.owner : 'Libre'}
                 </div>
               </div>
-              <div className="mt-2 text-right">
-                <Button size="sm" variant="secondary" onClick={onClose}>
+              <div className="mt-2 flex justify-end">
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={() => handleNavigateToZone(row.centroid)}
+                  className="gap-1"
+                >
+                  <MapPin className="h-3 w-3" />
                   Ver en mapa
                 </Button>
               </div>

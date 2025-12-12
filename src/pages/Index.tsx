@@ -112,6 +112,7 @@ const Index = () => {
   const [summaryData, setSummaryData] = useState<any>(null);
   const [viewUserProfileId, setViewUserProfileId] = useState<string | null>(null);
   const [isOffline, setIsOffline] = useState<boolean>(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [mapTargetLocation, setMapTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
   const { pendingRunsCount, isSyncing: isOfflineSyncing, syncRuns } = useOfflineSync();
 
   const {
@@ -201,6 +202,13 @@ const Index = () => {
     setShowSummary(false);
   }, []);
 
+  const handleNavigateToZone = useCallback((coordinates: { lat: number; lng: number }) => {
+    setMapTargetLocation(coordinates);
+    setActiveSection('home');
+    // Clear target after a short delay to allow re-navigation to same location
+    setTimeout(() => setMapTargetLocation(null), 2000);
+  }, []);
+
   const handleCloseTutorial = useCallback(() => {
     setShowTutorial(false);
   }, []);
@@ -246,6 +254,7 @@ const Index = () => {
               isRunning={isRunning && !useGPS}
               currentLocation={currentLocation}
               locationAccuracy={accuracy}
+              targetLocation={mapTargetLocation}
             />
             <RunPredictionOverlay
               runPath={runPath}
@@ -281,7 +290,11 @@ const Index = () => {
               ) : competeTab === 'challenges' ? (
                 <Challenges onClose={() => setActiveSection('home')} isMobileFullPage />
               ) : (
-                <Zones onClose={() => setActiveSection('home')} isMobileFullPage />
+                <Zones 
+                  onClose={() => setActiveSection('home')} 
+                  onNavigateToZone={handleNavigateToZone}
+                  isMobileFullPage 
+                />
               )}
             </Suspense>
           </div>
@@ -360,6 +373,7 @@ const Index = () => {
             isRunning={isRunning && !useGPS}
             currentLocation={currentLocation}
             locationAccuracy={accuracy}
+            targetLocation={mapTargetLocation}
           />
           <RunPredictionOverlay
             runPath={runPath}
@@ -414,7 +428,10 @@ const Index = () => {
             <Challenges onClose={() => setActiveSection('home')} />
           )}
           {activeSection === 'compete' && competeTab === 'zones' && (
-            <Zones onClose={() => setActiveSection('home')} />
+            <Zones 
+              onClose={() => setActiveSection('home')} 
+              onNavigateToZone={handleNavigateToZone}
+            />
           )}
           {activeSection === 'compete' && competeTab === 'leagues' && (
             <Leagues onClose={() => setActiveSection('home')} />
