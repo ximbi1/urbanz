@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { polygon, area as turfArea, intersect, difference, booleanPointInPolygon, point, simplify, buffer, union, booleanContains } from 'npm:@turf/turf@6.5.0'
-import webpush from 'npm:web-push@3.6.1'
+import { polygon, area as turfArea, intersect, difference, booleanPointInPolygon, point, simplify, buffer, union, booleanContains } from 'https://esm.sh/@turf/turf@6.5.0'
+import webpush from 'https://esm.sh/web-push@3.6.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -746,8 +746,9 @@ const updateClanCollaboration = async (
       })
       .eq('id', membership.id)
 
-    const clanPoints = (membership.clan?.total_points || 0) + basePoints + missionBonus
-    const clanTerritories = Math.max((membership.clan?.territories_controlled || 0) + territoriesDelta, 0)
+    const clanData = Array.isArray(membership.clan) ? membership.clan[0] : membership.clan
+    const clanPoints = (clanData?.total_points || 0) + basePoints + missionBonus
+    const clanTerritories = Math.max((clanData?.territories_controlled || 0) + territoriesDelta, 0)
 
     await supabaseAdmin
       .from('clans')
