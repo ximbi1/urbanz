@@ -890,19 +890,20 @@ const MapView = ({ runPath, onMapClick, isRunning, currentLocation, locationAccu
         });
       }
 
-      // Ahora detectar parques que están DENTRO de territorios existentes
+      // Ahora detectar parques que están DENTRO de territorios existentes (usando el centro del parque)
       const parks = mapPois.filter(poi => poi.category === 'park' && poi.coordinates?.length >= 3);
       
       parks.forEach(park => {
         // Si ya tiene conquista explícita, no sobrescribir
         if (conquests.has(park.id)) return;
         
-        // Buscar si el parque está contenido dentro de algún territorio
+        // Calcular centroide del parque y comprobar si está dentro de algún territorio
+        const parkCentroid = calculateCentroid(park.coordinates);
+
         for (const territory of territories) {
           if (!territory.coordinates?.length) continue;
           
-          // Verificar si el parque está contenido en el territorio
-          if (isPolygonContained(park.coordinates, territory.coordinates)) {
+          if (isPointInPolygon(parkCentroid, territory.coordinates)) {
             conquests.set(park.id, {
               owner: territory.owner || 'Usuario',
               color: territory.color || '#22c55e'
