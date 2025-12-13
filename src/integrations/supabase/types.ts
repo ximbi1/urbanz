@@ -823,6 +823,8 @@ export type Database = {
           current_league: string | null
           current_streak: number
           explorer_mode: boolean | null
+          gender: string | null
+          height: number | null
           historical_points: number | null
           id: string
           league_shard: string | null
@@ -843,6 +845,8 @@ export type Database = {
           current_league?: string | null
           current_streak?: number
           explorer_mode?: boolean | null
+          gender?: string | null
+          height?: number | null
           historical_points?: number | null
           id: string
           league_shard?: string | null
@@ -863,6 +867,8 @@ export type Database = {
           current_league?: string | null
           current_streak?: number
           explorer_mode?: boolean | null
+          gender?: string | null
+          height?: number | null
           historical_points?: number | null
           id?: string
           league_shard?: string | null

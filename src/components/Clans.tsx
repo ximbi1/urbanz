@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Shield, Sparkles, Target, Trophy, Megaphone, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users, ChevronDown } from 'lucide-react';
+import { Shield, Sparkles, Target, Trophy, Megaphone, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users, ChevronDown, Edit2, Save } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -136,6 +136,9 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [missionsOpen, setMissionsOpen] = useState(true);
   const [membersOpen, setMembersOpen] = useState(true);
+  const [isEditingClan, setIsEditingClan] = useState(false);
+  const [editClanForm, setEditClanForm] = useState({ name: '', description: '', color: '#2563eb' });
+  const [editClanLoading, setEditClanLoading] = useState(false);
   const chatListRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (chatListRef.current) {
@@ -538,6 +541,46 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     }
   };
 
+  const handleEditClan = async () => {
+    if (!membership?.clan?.id || !editClanForm.name.trim()) {
+      toast.error('El nombre del clan es obligatorio');
+      return;
+    }
+    setEditClanLoading(true);
+    try {
+      const { error } = await supabase
+        .from('clans')
+        .update({
+          name: editClanForm.name.trim(),
+          description: editClanForm.description.trim() || null,
+          banner_color: editClanForm.color,
+        })
+        .eq('id', membership.clan.id);
+
+      if (error) throw error;
+
+      toast.success('Clan actualizado correctamente');
+      setIsEditingClan(false);
+      await loadMembership();
+    } catch (error) {
+      console.error('Error actualizando clan:', error);
+      toast.error('No se pudo actualizar el clan');
+    } finally {
+      setEditClanLoading(false);
+    }
+  };
+
+  const startEditingClan = () => {
+    if (membership?.clan) {
+      setEditClanForm({
+        name: membership.clan.name || '',
+        description: membership.clan.description || '',
+        color: membership.clan.banner_color || '#2563eb',
+      });
+      setIsEditingClan(true);
+    }
+  };
+
   const { containerRef, isRefreshing, pullDistance, progress } = usePullToRefresh({
     onRefresh: async () => {
       setRefreshing(true);
@@ -605,47 +648,86 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
     <>
       {membership && (
         <Card className="p-5 bg-gradient-to-br from-primary/10 via-background to-background border border-primary/30">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm uppercase text-muted-foreground tracking-widest">Tu clan</p>
-                <h2 className="text-2xl font-display font-bold" style={{ color: membership.clan?.banner_color || undefined }}>
-                  {membership.clan?.name || 'Clan sin nombre'}
-                </h2>
+          {isEditingClan ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm uppercase text-muted-foreground tracking-widest">Editar clan</p>
+                <Button size="sm" variant="ghost" onClick={() => setIsEditingClan(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleLeaveClan}
-                disabled={leaveLoading}
-              >
-                {leaveLoading ? 'Saliendo...' : 'Abandonar clan'}
+              <Input
+                placeholder="Nombre del clan"
+                value={editClanForm.name}
+                onChange={(e) => setEditClanForm(prev => ({ ...prev, name: e.target.value }))}
+              />
+              <Textarea
+                placeholder="Descripción del clan"
+                value={editClanForm.description}
+                onChange={(e) => setEditClanForm(prev => ({ ...prev, description: e.target.value }))}
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">Color del banner</label>
+                <input
+                  type="color"
+                  value={editClanForm.color}
+                  onChange={(e) => setEditClanForm(prev => ({ ...prev, color: e.target.value }))}
+                  className="h-8 w-16 rounded border border-border bg-background"
+                />
+              </div>
+              <Button onClick={handleEditClan} disabled={editClanLoading} className="w-full">
+                <Save className="w-4 h-4 mr-2" />
+                {editClanLoading ? 'Guardando...' : 'Guardar cambios'}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {membership.clan?.description || 'Coordina las conquistas urbanas con tu escuadrón para dominar la ciudad.'}
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-card/60 border border-border/60">
-                <p className="text-xs text-muted-foreground">Puntos totales</p>
-                <p className="text-xl font-bold">{membership.clan?.total_points || 0}</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm uppercase text-muted-foreground tracking-widest">Tu clan</p>
+                  <h2 className="text-2xl font-display font-bold" style={{ color: membership.clan?.banner_color || undefined }}>
+                    {membership.clan?.name || 'Clan sin nombre'}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(membership.role === 'leader' || membership.role === 'officer') && (
+                    <Button size="sm" variant="outline" onClick={startEditingClan}>
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleLeaveClan}
+                    disabled={leaveLoading}
+                  >
+                    {leaveLoading ? 'Saliendo...' : 'Abandonar'}
+                  </Button>
+                </div>
               </div>
-              <div className="p-3 rounded-lg bg-card/60 border border-border/60">
-                <p className="text-xs text-muted-foreground">Territorios controlados</p>
-                <p className="text-xl font-bold">{membership.clan?.territories_controlled || 0}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-card/60 border border-border/60">
-                <p className="text-xs text-muted-foreground">Tu aporte</p>
-                <p className="text-xl font-bold">{membership.contribution_points || 0} pts</p>
-              </div>
-              <div className="p-3 rounded-lg bg-card/60 border border-border/60">
-                <p className="text-xs text-muted-foreground">Antigüedad</p>
-                <p className="text-xl font-bold">
-                  {membership.clan?.created_at ? new Date(membership.clan.created_at).toLocaleDateString() : '—'}
-                </p>
+              <p className="text-sm text-muted-foreground">
+                {membership.clan?.description || 'Coordina las conquistas urbanas con tu escuadrón para dominar la ciudad.'}
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg bg-card/60 border border-border/60">
+                  <p className="text-xs text-muted-foreground">Puntos totales</p>
+                  <p className="text-xl font-bold">{membership.clan?.total_points || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-card/60 border border-border/60">
+                  <p className="text-xs text-muted-foreground">Territorios controlados</p>
+                  <p className="text-xl font-bold">{membership.clan?.territories_controlled || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-card/60 border border-border/60">
+                  <p className="text-xs text-muted-foreground">Tu aporte</p>
+                  <p className="text-xl font-bold">{membership.contribution_points || 0} pts</p>
+                </div>
+                <div className="p-3 rounded-lg bg-card/60 border border-border/60">
+                  <p className="text-xs text-muted-foreground">Miembros</p>
+                  <p className="text-xl font-bold">{clanMembers.length}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </Card>
       )}
 

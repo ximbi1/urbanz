@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { MapPin, Trophy, Users, Loader2 } from 'lucide-react';
 
@@ -10,6 +11,8 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [gender, setGender] = useState('');
+  const [height, setHeight] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
 
@@ -156,6 +159,38 @@ const Auth = () => {
                 required={!isLogin}
                 className="bg-background/50 border-border/50 focus:border-primary transition-colors"
               />
+            </div>
+
+            {/* Gender and Height (only for signup) */}
+            <div className={`grid grid-cols-2 gap-3 overflow-hidden transition-all duration-300 ${
+              !isLogin ? 'max-h-24 opacity-100' : 'max-h-0 opacity-0'
+            }`}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Género</label>
+                <Select value={gender} onValueChange={setGender}>
+                  <SelectTrigger className="bg-background/50 border-border/50">
+                    <SelectValue placeholder="Opcional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Hombre</SelectItem>
+                    <SelectItem value="female">Mujer</SelectItem>
+                    <SelectItem value="other">Otro</SelectItem>
+                    <SelectItem value="prefer_not_to_say">Prefiero no decirlo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Altura (cm)</label>
+                <Input
+                  type="number"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="175"
+                  min="100"
+                  max="250"
+                  className="bg-background/50 border-border/50 focus:border-primary transition-colors"
+                />
+              </div>
             </div>
 
             {/* Password input */}

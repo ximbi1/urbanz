@@ -1,10 +1,11 @@
-import { Bell, Flame } from 'lucide-react';
+import { Bell, Flame, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react';
 import { calculateLevel, getLevelTitle } from '@/utils/levelSystem';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   onShowNotifications: () => void;
@@ -12,6 +13,7 @@ interface HeaderProps {
 
 const Header = ({ onShowNotifications }: HeaderProps) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
@@ -113,6 +115,14 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
         </div>
         
         <div className="flex items-center gap-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hover:bg-primary/20"
+              onClick={() => navigate('/about')}
+            >
+              <Info className="h-5 w-5" />
+            </Button>
             <Button 
               variant="ghost" 
               size="icon" 

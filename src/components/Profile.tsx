@@ -1,4 +1,4 @@
-import { X, Trophy, MapPin, Route, Trash2, Edit2, Upload, User, Award, LogOut, TrendingUp, Info, FileUp, ShieldHalf, ShieldCheck, Loader2, Shield } from 'lucide-react';
+import { X, Trophy, MapPin, Route, Trash2, Edit2, Upload, User, Award, LogOut, TrendingUp, Info, FileUp, ShieldHalf, ShieldCheck, Loader2, Shield, Ruler } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,6 +28,8 @@ import { usePlayerSettings } from '@/hooks/usePlayerSettings';
 const profileSchema = z.object({
   username: z.string().min(3, 'El nombre debe tener al menos 3 caracteres').max(20, 'El nombre no puede tener más de 20 caracteres'),
   bio: z.string().max(200, 'La biografía no puede tener más de 200 caracteres').optional(),
+  height: z.number().min(100).max(250).optional().nullable(),
+  gender: z.string().optional().nullable(),
 });
 
 interface ProfileProps {
@@ -117,6 +120,8 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
     setAvatarUrl(data.avatar_url);
     setValue('username', data.username);
     setValue('bio', data.bio || '');
+    setValue('height', data.height || null);
+    setValue('gender', data.gender || null);
   };
 
   const loadUserClan = async () => {
@@ -385,6 +390,8 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
         .update({
           username: data.username,
           bio: data.bio || null,
+          height: data.height || null,
+          gender: data.gender || null,
         })
         .eq('id', user.id);
       
@@ -536,6 +543,20 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
               {profile?.bio && (
                 <p className="text-sm text-muted-foreground mt-1">{profile.bio}</p>
               )}
+              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                {profile?.gender && profile.gender !== 'prefer_not_to_say' && (
+                  <span className="flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    {profile.gender === 'male' ? 'Hombre' : profile.gender === 'female' ? 'Mujer' : 'Otro'}
+                  </span>
+                )}
+                {profile?.height && (
+                  <span className="flex items-center gap-1">
+                    <Ruler className="w-3 h-3" />
+                    {profile.height} cm
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -593,6 +614,37 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
               <p className="text-xs text-muted-foreground">
                 {watch('bio')?.length || 0}/200 caracteres
               </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="gender">Género</Label>
+                <Select 
+                  value={watch('gender') || ''} 
+                  onValueChange={(value) => setValue('gender', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Hombre</SelectItem>
+                    <SelectItem value="female">Mujer</SelectItem>
+                    <SelectItem value="other">Otro</SelectItem>
+                    <SelectItem value="prefer_not_to_say">Prefiero no decirlo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="height">Altura (cm)</Label>
+                <Input
+                  id="height"
+                  type="number"
+                  min={100}
+                  max={250}
+                  {...register('height', { valueAsNumber: true })}
+                  placeholder="175"
+                />
+              </div>
             </div>
             
             <div className="flex gap-2">
