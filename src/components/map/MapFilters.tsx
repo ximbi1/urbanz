@@ -35,7 +35,7 @@ export const MapFilters = ({
   onToggleDistricts,
 }: MapFiltersProps) => {
   return (
-    <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-3">
+    <div className="flex flex-col items-start gap-3">
       <Button
         variant="secondary"
         size="sm"
