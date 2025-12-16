@@ -23,6 +23,8 @@ export interface OfflineRunEntry {
   id: string;
   payload: OfflineRunPayload;
   metadata: OfflineRunMetadata;
+  attempts?: number;
+  nextAttemptAt?: number;
 }
 
 const safeParse = (): OfflineRunEntry[] => {
@@ -58,10 +60,41 @@ export const enqueueOfflineRun = (
     id: `offline-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     payload,
     metadata,
+    attempts: 0,
+    nextAttemptAt: 0,
   };
   queue.push(entry);
   persist(queue);
   return entry;
+};
+
+export const updateOfflineRun = (id: string, updates: Partial<OfflineRunEntry>) => {
+  const queue = safeParse();
+  const index = queue.findIndex((entry) => entry.id === id);
+  if (index === -1) return;
+  queue[index] = { ...queue[index], ...updates };
+  persist(queue);
+};
+
+export const markOfflineRunFailed = (id: string) => {
+  const queue = safeParse();
+  const index = queue.findIndex((entry) => entry.id === id);
+  if (index === -1) return;
+
+  const attempts = (queue[index].attempts ?? 0) + 1;
+  const backoffMs = Math.min(5 * 60 * 1000, Math.pow(2, Math.min(attempts, 6)) * 1000);
+  queue[index] = {
+    ...queue[index],
+    attempts,
+    nextAttemptAt: Date.now() + backoffMs,
+  };
+
+  persist(queue);
+};
+
+export const shouldAttemptRun = (entry: OfflineRunEntry) => {
+  if (!entry.nextAttemptAt) return true;
+  return entry.nextAttemptAt <= Date.now();
 };
 
 export const removeOfflineRun = (id: string) => {

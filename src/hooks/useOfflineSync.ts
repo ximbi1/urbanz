@@ -6,6 +6,8 @@ import {
   removeOfflineRun,
   subscribeOfflineQueue,
   OfflineRunEntry,
+  markOfflineRunFailed,
+  shouldAttemptRun,
 } from '@/utils/offlineQueue';
 
 const formatDistance = (meters: number) => {
@@ -24,7 +26,7 @@ export const useOfflineSync = () => {
   const syncRuns = useCallback(async () => {
     if (isSyncing) return;
     if (!navigator.onLine) return;
-    const queue = getOfflineRuns();
+    const queue = getOfflineRuns().filter(shouldAttemptRun);
     if (!queue.length) {
       refreshQueue();
       return;
@@ -35,29 +37,40 @@ export const useOfflineSync = () => {
       const { data } = await supabase.auth.getUser();
       const currentUser = data?.user;
       if (!currentUser) {
+        toast.error('Inicia sesión para sincronizar tus carreras offline');
         return;
       }
 
       for (const entry of queue) {
         if (entry.payload.userId !== currentUser.id) continue;
-        const { data: claimResult, error } = await supabase.functions.invoke('process-territory-claim', {
-          body: {
-            path: entry.payload.path,
-            duration: entry.payload.duration,
-            source: entry.payload.source,
-          },
-        });
+        try {
+          const { data: claimResult, error } = await supabase.functions.invoke('process-territory-claim', {
+            body: {
+              path: entry.payload.path,
+              duration: entry.payload.duration,
+              source: entry.payload.source,
+            },
+          });
 
-        if (error || !claimResult?.success) {
-          const message = error?.message || (claimResult as any)?.error || 'No se pudo sincronizar';
-          throw new Error(message);
+          if (error || !claimResult?.success) {
+            const message = error?.message || (claimResult as any)?.error || 'No se pudo sincronizar';
+            markOfflineRunFailed(entry.id);
+            toast.error('Error al sincronizar carrera', { description: message });
+            continue;
+          }
+
+          removeOfflineRun(entry.id);
+          refreshQueue();
+          toast.success('Carrera sincronizada', {
+            description: `${formatDistance(entry.metadata.distance)} · ${new Date(entry.metadata.createdAt).toLocaleString('es-ES')}`,
+          });
+        } catch (error: any) {
+          markOfflineRunFailed(entry.id);
+          console.error('Offline sync error', error);
+          toast.error('Error al sincronizar carrera', {
+            description: error?.message || 'Inténtalo nuevamente más tarde',
+          });
         }
-
-        removeOfflineRun(entry.id);
-        refreshQueue();
-        toast.success('Carrera sincronizada', {
-          description: `${formatDistance(entry.metadata.distance)} · ${new Date(entry.metadata.createdAt).toLocaleString('es-ES')}`,
-        });
       }
     } catch (error) {
       console.error('Offline sync error', error);

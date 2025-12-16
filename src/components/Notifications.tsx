@@ -147,39 +147,37 @@ const Notifications = ({ onClose, isMobileFullPage = false }: NotificationsProps
 
   if (isMobileFullPage) {
     return (
-      <div className="w-full h-full flex flex-col bg-background">
-        <div ref={containerRef} className="container mx-auto px-4 py-6 space-y-4 flex-1 overflow-y-auto pb-24 relative">
+      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center">
+              <Bell className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-display font-bold">Notificaciones</h2>
+              {unreadCount > 0 && (
+                <p className="text-xs text-muted-foreground">{unreadCount} sin leer</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+                <Check className="h-4 w-4 mr-2" /> Todas
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+
+        <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-4 pb-24 relative">
           <PullToRefreshIndicator
             isRefreshing={isRefreshing}
             pullDistance={pullDistance}
             progress={progress}
           />
-          
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Bell className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-display font-bold glow-primary">Notificaciones</h2>
-                {unreadCount > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {unreadCount} sin leer
-                  </p>
-                )}
-              </div>
-            </div>
-            {unreadCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={markAllAsRead}
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Todas
-              </Button>
-            )}
-          </div>
 
           {loading ? (
             <ContentSkeleton type="notifications" count={5} />
