@@ -1,6 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { polygon, area as turfArea, intersect, difference, booleanPointInPolygon, point, simplify, buffer, union, booleanContains } from 'https://esm.sh/@turf/turf@6.5.0'
+import { polygon, area as turfArea, intersect, booleanPointInPolygon, point, simplify, booleanContains, difference, buffer } from 'https://esm.sh/@turf/turf@6.5.0'
 import webpush from 'https://esm.sh/web-push@3.6.1'
+import {
+  calculateAveragePace,
+  calculateDistance,
+  calculatePathDistance,
+  calculatePerimeter,
+  calculatePolygonArea,
+  computeSafeDifference,
+  ensureClosed,
+  findClosedLoops,
+  isPolygonClosed,
+  mergeLoopsIntoPolygon,
+  toLatLngCoordsFromGeo,
+  toPolygonCoords,
+} from './lib/geo.ts'
+import { ClaimPayload, Coordinate } from './lib/types.ts'
+import { calculateLevel, calculateRequiredPace, calculateRewardPoints, getMaxAreaForLevel } from './lib/rewards.ts'
+import { createLogger } from './lib/logger.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,29 +36,6 @@ const CLAN_MISSION_LABELS: Record<string, string> = {
   territories: 'Territorios coordinados',
   points: 'Influencia acumulada',
 }
-const LEVEL_THRESHOLDS = [
-  0,
-  100,
-  250,
-  500,
-  850,
-  1300,
-  1900,
-  2600,
-  3400,
-  4300,
-  5300,
-  6500,
-  7900,
-  9500,
-  11300,
-  13300,
-  15500,
-  18000,
-  20800,
-  24000,
-]
-
 const supabaseUrl = Deno.env.get('SUPABASE_URL')
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const VAPID_PUBLIC_KEY = Deno.env.get('PUSH_VAPID_PUBLIC_KEY')
@@ -58,252 +52,6 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 const canSendPush = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY)
 
-interface Coordinate {
-  lat: number
-  lng: number
-  accuracy?: number
-  timestamp?: number
-}
-
-interface ClaimPayload {
-  path: Coordinate[]
-  duration: number
-  source?: 'live' | 'import'
-}
-
-const metersToKm = (meters: number) => meters / 1000
-
-const calculateDistance = (point1: Coordinate, point2: Coordinate): number => {
-  const R = 6371000
-  const phi1 = (point1.lat * Math.PI) / 180
-  const phi2 = (point2.lat * Math.PI) / 180
-  const deltaPhi = ((point2.lat - point1.lat) * Math.PI) / 180
-  const deltaLambda = ((point2.lng - point1.lng) * Math.PI) / 180
-
-  const a =
-    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-  return R * c
-}
-
-const calculatePathDistance = (path: Coordinate[]): number => {
-  let total = 0
-  for (let i = 1; i < path.length; i++) {
-    total += calculateDistance(path[i - 1], path[i])
-  }
-  return total
-}
-
-const isPolygonClosed = (path: Coordinate[], threshold = 50): boolean => {
-  if (path.length < 3) return false
-  const distance = calculateDistance(path[0], path[path.length - 1])
-  return distance <= threshold
-}
-
-// Detectar loops cerrados dentro de una ruta (para vueltas a plazas, etc.)
-const findClosedLoops = (path: Coordinate[], threshold = 30): Coordinate[][] => {
-  const loops: Coordinate[][] = []
-  if (path.length < 4) return loops
-
-  // Buscar puntos donde la ruta se cruza consigo misma
-  for (let i = 0; i < path.length - 3; i++) {
-    for (let j = i + 3; j < path.length; j++) {
-      const dist = calculateDistance(path[i], path[j])
-      if (dist <= threshold) {
-        // Encontramos un loop entre i y j
-        const loopPath = path.slice(i, j + 1)
-        if (loopPath.length >= 4) {
-          // Cerrar el loop añadiendo el primer punto al final
-          loopPath.push({ ...loopPath[0] })
-          loops.push(loopPath)
-        }
-        // Saltamos j para no encontrar loops duplicados
-        break
-      }
-    }
-  }
-
-  return loops
-}
-
-// Unir múltiples loops en un solo polígono
-const mergeLoopsIntoPolygon = (mainPath: Coordinate[], loops: Coordinate[][]): Coordinate[] => {
-  if (loops.length === 0) return mainPath
-
-  try {
-    // Crear polígono principal
-    const mainCoords = toPolygonCoords(mainPath)
-    let mergedPolygon = polygon([mainCoords])
-
-    // Unir cada loop al polígono principal
-    for (const loop of loops) {
-      try {
-        const loopCoords = toPolygonCoords(loop)
-        const loopPolygon = polygon([loopCoords])
-        const unified = union(mergedPolygon, loopPolygon)
-        if (unified && unified.geometry.type === 'Polygon') {
-          mergedPolygon = unified as any
-        }
-      } catch (e) {
-        console.warn('Error uniendo loop:', e)
-      }
-    }
-
-    // Convertir de vuelta a coordenadas
-    const resultCoords = mergedPolygon.geometry.coordinates[0]
-    return resultCoords.map((coord: number[]) => ({ lng: coord[0], lat: coord[1] }))
-  } catch (e) {
-    console.warn('Error en mergeLoopsIntoPolygon:', e)
-    return mainPath
-  }
-}
-
-const calculatePolygonArea = (coordinates: Coordinate[]): number => {
-  if (coordinates.length < 3) return 0
-  let area = 0
-  const R = 6371000
-  for (let i = 0; i < coordinates.length; i++) {
-    const j = (i + 1) % coordinates.length
-    const lat1 = (coordinates[i].lat * Math.PI) / 180
-    const lat2 = (coordinates[j].lat * Math.PI) / 180
-    const lng1 = (coordinates[i].lng * Math.PI) / 180
-    const lng2 = (coordinates[j].lng * Math.PI) / 180
-    area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2))
-  }
-  area = (area * R * R) / 2
-  return Math.abs(area)
-}
-
-const calculatePerimeter = (coordinates: Coordinate[]): number => {
-  if (coordinates.length < 2) return 0
-  let perimeter = 0
-  for (let i = 0; i < coordinates.length; i++) {
-    const j = (i + 1) % coordinates.length
-    perimeter += calculateDistance(coordinates[i], coordinates[j])
-  }
-  return perimeter
-}
-
-const calculateAveragePace = (distance: number, duration: number): number => {
-  if (distance === 0) return 0
-  const distanceKm = distance / 1000
-  const durationMin = duration / 60
-  return durationMin / distanceKm
-}
-
-const calculateLevel = (totalPoints: number) => {
-  let level = 1
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-    if (totalPoints >= LEVEL_THRESHOLDS[i]) {
-      level = i + 1
-    } else {
-      break
-    }
-  }
-  if (level >= LEVEL_THRESHOLDS.length) {
-    const extraLevels = Math.floor((totalPoints - LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]) / 3000)
-    level = LEVEL_THRESHOLDS.length + extraLevels
-  }
-  return level
-}
-
-const getMaxAreaForLevel = (_level: number) => {
-  return 5_000_000
-}
-
-const calculateDefenseBonusMinutes = (level: number): number => {
-  if (level >= 11) return 1
-  if (level >= 6) return 0.75
-  return 0.5
-}
-
-const calculateRequiredPace = (territoryPace: number, level: number): number => {
-  const bonus = calculateDefenseBonusMinutes(level)
-  const required = territoryPace - bonus
-  return Math.max(required, 2.5)
-}
-
-const toPolygonCoords = (path: Coordinate[]) => {
-  const coords = path.map((point) => [point.lng, point.lat])
-  const first = coords[0]
-  const last = coords[coords.length - 1]
-  if (first[0] !== last[0] || first[1] !== last[1]) {
-    coords.push([...first])
-  }
-  return coords
-}
-
-const toLatLngCoordsFromGeo = (feature: any): Coordinate[] => {
-  if (!feature?.geometry) return []
-  const { type, coordinates } = feature.geometry
-
-  const extractRing = (ring: number[][]): Coordinate[] => ring.map(([lng, lat]) => ({ lat, lng }))
-
-  if (type === 'Polygon') {
-    const ring = coordinates[0] || []
-    return extractRing(ring)
-  }
-
-  if (type === 'MultiPolygon') {
-    let best: Coordinate[] = []
-    let bestArea = 0
-    for (const poly of coordinates) {
-      const ring = poly[0] || []
-      const asCoords = extractRing(ring)
-      if (asCoords.length >= 3) {
-        const polyFeature = polygon([ring])
-        const a = turfArea(polyFeature)
-        if (a > bestArea) {
-          bestArea = a
-          best = asCoords
-        }
-      }
-    }
-    return best
-  }
-
-  return []
-}
-
-const ensureClosed = (coords: Coordinate[]): Coordinate[] => {
-  if (!coords.length) return coords
-  const first = coords[0]
-  const last = coords[coords.length - 1]
-  if (first.lat !== last.lat || first.lng !== last.lng) {
-    return [...coords, { ...first }]
-  }
-  return coords
-}
-
-const computeSafeDifference = (baseGeom: any, cutGeom: any): Coordinate[] | null => {
-  try {
-    let diff = difference(baseGeom, cutGeom)
-    if (!diff) {
-      // Intentar con buffer(0) para limpiar topología
-      diff = difference(buffer(baseGeom, 0), buffer(cutGeom, 0))
-    }
-    if (!diff) return null
-
-    const coords = toLatLngCoordsFromGeo(diff)
-    const closed = ensureClosed(coords)
-    if (closed.length < 4) return null
-    const a = turfArea(diff)
-    if (a < MINIMUM_AREA_M2) return null
-    return closed
-  } catch (e) {
-    console.warn('Error computing difference:', e)
-    return null
-  }
-}
-
-const calculateRewardPoints = (distance: number, area: number, isSteal: boolean) => {
-  const distancePoints = Math.round(metersToKm(distance) * 10)
-  const areaPoints = Math.floor(area / 2000)
-  const actionPoints = isSteal ? 75 : 50
-  return distancePoints + areaPoints + actionPoints
-}
 
 const fetchUserFromToken = async (token: string) => {
   const { data, error } = await supabaseAdmin.auth.getUser(token)
@@ -786,7 +534,8 @@ const fetchActiveShield = async (territoryId: string) => {
 
 const sendPushNotification = async (
   userId: string | null,
-  notification: { title: string; body: string; data?: Record<string, unknown>; tag?: string }
+  notification: { title: string; body: string; data?: Record<string, unknown>; tag?: string },
+  traceId?: string
 ) => {
   if (!canSendPush || !userId) return
   const { data: subscriptions } = await supabaseAdmin
@@ -816,7 +565,7 @@ const sendPushNotification = async (
           .delete()
           .eq('id', sub.id)
       } else {
-        console.error('Error enviando notificación push', error)
+        console.error('Error enviando notificación push', { traceId, error })
       }
     }
   }))
@@ -908,6 +657,8 @@ const splitTerritoryWithInnerConquest = async (
 }
 
 Deno.serve(async (req) => {
+  const traceId = crypto.randomUUID()
+  const logger = createLogger(traceId)
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -923,9 +674,11 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '').trim()
     const user = await fetchUserFromToken(token)
+    logger.info('User authenticated', { userId: user.id })
 
     const payload = (await req.json()) as ClaimPayload
     if (!payload?.path || payload.path.length < 4) {
+      logger.warn('Invalid payload path', { traceId, points: payload?.path?.length })
       return new Response(
         JSON.stringify({ error: 'Ruta inválida' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -933,6 +686,7 @@ Deno.serve(async (req) => {
     }
 
     if (!payload.duration || payload.duration <= 0) {
+      logger.warn('Invalid payload duration', { traceId, duration: payload?.duration })
       return new Response(
         JSON.stringify({ error: 'Duración inválida' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -949,6 +703,7 @@ Deno.serve(async (req) => {
     }
 
     if (!isPolygonClosed(path)) {
+      logger.warn('Polygon not closed', { traceId, points: path.length })
       return new Response(
         JSON.stringify({ error: 'Debes cerrar el polígono para reclamar un territorio' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -974,6 +729,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (profileError || !profile) {
+      logger.error('Profile not found or error', { error: profileError?.message, userId: user.id })
       throw new Error('No se encontró el perfil del usuario')
     }
 
@@ -983,6 +739,7 @@ Deno.serve(async (req) => {
     const maxArea = getMaxAreaForLevel(userLevel)
 
     if (area > maxArea) {
+      logger.warn('Area exceeds max limit', { area, maxArea, userLevel })
       return new Response(
         JSON.stringify({ error: `El área (${Math.round(area)} m²) supera el límite permitido (${Math.round(maxArea)} m²)` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1179,7 +936,7 @@ Deno.serve(async (req) => {
         )
       }
 
-      const reducedCoords = computeSafeDifference(targetTerritoryPolygon, targetOverlapGeom)
+      const reducedCoords = computeSafeDifference(targetTerritoryPolygon, targetOverlapGeom, MINIMUM_AREA_M2)
       if (!reducedCoords) {
         return new Response(
           JSON.stringify({ error: 'No se pudo recalcular el territorio original tras el recorte' }),
@@ -1302,7 +1059,7 @@ Deno.serve(async (req) => {
           body: `${attackerName} ha conquistado una parte de tu territorio`,
           data: { url: `/territories/${targetTerritory.id}` },
           tag: targetTerritory.id,
-        })
+        }, traceId)
       }
 
       await supabaseAdmin
@@ -1415,7 +1172,7 @@ Deno.serve(async (req) => {
         body: `${attackerName} ha conquistado una zona dentro de tu territorio`,
         data: { url: `/territories/${targetTerr.id}` },
         tag: targetTerr.id,
-      })
+      }, traceId)
     }
     // CASO 3: Reforzar territorio propio
     else if (isOwnTerritory && targetTerritory) {
@@ -1534,7 +1291,7 @@ Deno.serve(async (req) => {
             body,
             data: { url: '/challenges' },
             tag: 'map-challenge'
-          })
+          }, traceId)
         }
       )
       challengeRewards = completedChallenges.map(ch => ch.name)
@@ -1600,7 +1357,7 @@ Deno.serve(async (req) => {
           : `Has conquistado ${totalParks} parques`,
         data: { url: '/' },
         tag: 'park-conquest'
-      })
+      }, traceId)
     }
 
     if (territoryId) {
@@ -1647,8 +1404,8 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error(error)
     const message = error instanceof Error ? error.message : 'Error inesperado'
+    console.error('Unhandled process-territory-claim error', { traceId, error })
     return new Response(
       JSON.stringify({ error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
