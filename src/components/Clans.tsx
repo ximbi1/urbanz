@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Shield, Sparkles, Target, Trophy, Megaphone, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users, ChevronDown, Edit2, Save } from 'lucide-react';
+import { Shield, Sparkles, Target, Trophy, Megaphone, Trees, Droplets, Activity, Flag, Plus, TrendingUp, X, Users, ChevronDown, Edit2, Save, MapIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './PullToRefreshIndicator';
+import ClanTerritoriesMap from './ClanTerritoriesMap';
 
 interface ClansProps {
   onClose: () => void;
@@ -136,6 +137,7 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [missionsOpen, setMissionsOpen] = useState(true);
   const [membersOpen, setMembersOpen] = useState(true);
+  const [mapOpen, setMapOpen] = useState(true);
   const [isEditingClan, setIsEditingClan] = useState(false);
   const [editClanForm, setEditClanForm] = useState({ name: '', description: '', color: '#2563eb' });
   const [editClanLoading, setEditClanLoading] = useState(false);
@@ -729,6 +731,21 @@ const Clans = ({ onClose, isMobileFullPage = false }: ClansProps) => {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Mapa de territorios del clan */}
+      {membership?.clan?.id && (
+        <SectionCard
+          title="Territorios del clan"
+          icon={<MapIcon className="w-4 h-4 text-primary" />}
+          isOpen={mapOpen}
+          onToggle={() => setMapOpen((prev) => !prev)}
+        >
+          <ClanTerritoriesMap 
+            clanId={membership.clan.id} 
+            bannerColor={membership.clan.banner_color} 
+          />
+        </SectionCard>
       )}
 
       <div className="grid md:grid-cols-3 gap-4">
