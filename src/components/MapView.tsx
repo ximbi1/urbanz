@@ -990,20 +990,35 @@ const MapView = ({
         });
       }
 
-      // Ahora detectar parques que están DENTRO de territorios existentes (usando el centro del parque)
+      // Ahora detectar parques que están DENTRO de territorios existentes
       const parks = visiblePois.filter(poi => poi.category === 'park' && poi.coordinates?.length >= 3);
+      
+      // Función para verificar si un parque está mayoritariamente dentro de un territorio
+      const isParkInsideTerritory = (parkCoords: Coordinate[], territoryCoords: Coordinate[]) => {
+        if (!parkCoords.length || !territoryCoords.length) return false;
+        
+        // Verificar múltiples puntos del parque (centroide + vértices)
+        const parkCentroid = calculateCentroid(parkCoords);
+        
+        // Si el centroide está dentro, el parque está conquistado
+        if (isPointInPolygon(parkCentroid, territoryCoords)) return true;
+        
+        // Verificar si al menos 50% de los vértices del parque están dentro del territorio
+        const pointsInside = parkCoords.filter(coord => 
+          isPointInPolygon(coord, territoryCoords)
+        ).length;
+        
+        return pointsInside >= Math.ceil(parkCoords.length * 0.5);
+      };
       
       parks.forEach(park => {
         // Si ya tiene conquista explícita, no sobrescribir
         if (conquests.has(park.id)) return;
-        
-        // Calcular centroide del parque y comprobar si está dentro de algún territorio
-        const parkCentroid = calculateCentroid(park.coordinates);
 
         for (const territory of territories) {
           if (!territory.coordinates?.length) continue;
           
-          if (isPointInPolygon(parkCentroid, territory.coordinates)) {
+          if (isParkInsideTerritory(park.coordinates, territory.coordinates)) {
             conquests.set(park.id, {
               owner: territory.owner || 'Usuario',
               color: territory.color || '#22c55e'
