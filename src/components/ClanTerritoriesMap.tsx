@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,11 +22,13 @@ interface ClanTerritory {
 const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const mapInitialized = useRef(false);
   const [territories, setTerritories] = useState<ClanTerritory[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
-  // Fetch Mapbox token
+  // Fetch Mapbox token - only once
   useEffect(() => {
     const fetchToken = async () => {
       try {
@@ -40,12 +42,11 @@ const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) =>
     fetchToken();
   }, []);
 
-  // Fetch clan territories
+  // Fetch clan territories - only once when clanId changes
   useEffect(() => {
     const fetchClanTerritories = async () => {
       setLoading(true);
       try {
-        // Get clan members
         const { data: members, error: membersError } = await supabase
           .from('clan_members')
           .select('user_id, profiles:profiles!clan_members_user_id_fkey(username, color)')
@@ -60,7 +61,6 @@ const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) =>
           return;
         }
 
-        // Get territories from all clan members
         const { data: territoriesData, error: territoriesError } = await supabase
           .from('territories')
           .select('id, coordinates, user_id, area')
@@ -68,7 +68,6 @@ const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) =>
 
         if (territoriesError) throw territoriesError;
 
-        // Map territories with member info
         const mapped: ClanTerritory[] = (territoriesData || []).map((t) => {
           const member = members?.find((m) => m.user_id === t.user_id);
           return {
@@ -92,15 +91,57 @@ const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) =>
     if (clanId) {
       fetchClanTerritories();
     }
-  }, [clanId, bannerColor]);
+  }, [clanId]); // bannerColor removed - we don't need to refetch on color change
 
-  // Initialize map
+  // Initialize map only once when token is available
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken || territories.length === 0) return;
+    if (!mapContainer.current || !mapboxToken || mapInitialized.current) return;
 
     mapboxgl.accessToken = mapboxToken;
 
-    // Calculate bounds from all territories
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [-3.7, 40.4], // Default center (Madrid)
+      zoom: 10,
+    });
+
+    map.current.on('load', () => {
+      setMapReady(true);
+    });
+
+    mapInitialized.current = true;
+
+    return () => {
+      map.current?.remove();
+      map.current = null;
+      mapInitialized.current = false;
+      setMapReady(false);
+    };
+  }, [mapboxToken]);
+
+  // Add/update territories on map when data changes
+  useEffect(() => {
+    if (!map.current || !mapReady || territories.length === 0) return;
+
+    // Remove existing territory layers and sources
+    territories.forEach((territory) => {
+      const sourceId = `territory-${territory.id}`;
+      const layerId = `territory-fill-${territory.id}`;
+      const outlineId = `territory-outline-${territory.id}`;
+
+      if (map.current?.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
+      if (map.current?.getLayer(outlineId)) {
+        map.current.removeLayer(outlineId);
+      }
+      if (map.current?.getSource(sourceId)) {
+        map.current.removeSource(sourceId);
+      }
+    });
+
+    // Calculate bounds
     let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
     territories.forEach((t) => {
       t.coordinates.forEach((coord) => {
@@ -111,109 +152,90 @@ const ClanTerritoriesMap = ({ clanId, bannerColor }: ClanTerritoriesMapProps) =>
       });
     });
 
-    const centerLng = (minLng + maxLng) / 2;
-    const centerLat = (minLat + maxLat) / 2;
+    // Add territories as layers
+    territories.forEach((territory) => {
+      const coords = territory.coordinates.map((c) => [c.lng, c.lat]);
+      if (coords.length < 3) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
-      center: [centerLng, centerLat],
-      zoom: 13,
-    });
+      // Close polygon if needed
+      const firstCoord = coords[0];
+      const lastCoord = coords[coords.length - 1];
+      if (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1]) {
+        coords.push(firstCoord);
+      }
 
-    map.current.on('load', () => {
-      if (!map.current) return;
+      const sourceId = `territory-${territory.id}`;
+      const layerId = `territory-fill-${territory.id}`;
+      const outlineId = `territory-outline-${territory.id}`;
 
-      // Add territories as layers
-      territories.forEach((territory, index) => {
-        const coords = territory.coordinates.map((c) => [c.lng, c.lat]);
-        if (coords.length < 3) return;
-
-        // Close polygon if needed
-        const firstCoord = coords[0];
-        const lastCoord = coords[coords.length - 1];
-        if (firstCoord[0] !== lastCoord[0] || firstCoord[1] !== lastCoord[1]) {
-          coords.push(firstCoord);
-        }
-
-        const sourceId = `territory-${territory.id}`;
-        const layerId = `territory-fill-${territory.id}`;
-        const outlineId = `territory-outline-${territory.id}`;
-
-        map.current!.addSource(sourceId, {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {
-              username: territory.username,
-              area: territory.area,
-            },
-            geometry: {
-              type: 'Polygon',
-              coordinates: [coords],
-            },
+      map.current!.addSource(sourceId, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {
+            username: territory.username,
+            area: territory.area,
           },
-        });
-
-        map.current!.addLayer({
-          id: layerId,
-          type: 'fill',
-          source: sourceId,
-          paint: {
-            'fill-color': territory.color,
-            'fill-opacity': 0.4,
+          geometry: {
+            type: 'Polygon',
+            coordinates: [coords],
           },
-        });
-
-        map.current!.addLayer({
-          id: outlineId,
-          type: 'line',
-          source: sourceId,
-          paint: {
-            'line-color': territory.color,
-            'line-width': 2,
-            'line-opacity': 0.8,
-          },
-        });
-
-        // Add popup on click
-        map.current!.on('click', layerId, (e) => {
-          if (!e.features?.length) return;
-          const props = e.features[0].properties;
-          new mapboxgl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(`
-              <div class="p-2">
-                <p class="font-semibold">${props?.username || 'Miembro'}</p>
-                <p class="text-sm text-gray-500">${Math.round(props?.area || 0)} m²</p>
-              </div>
-            `)
-            .addTo(map.current!);
-        });
-
-        map.current!.on('mouseenter', layerId, () => {
-          if (map.current) map.current.getCanvas().style.cursor = 'pointer';
-        });
-
-        map.current!.on('mouseleave', layerId, () => {
-          if (map.current) map.current.getCanvas().style.cursor = '';
-        });
+        },
       });
 
-      // Fit bounds to show all territories
-      if (minLng !== Infinity) {
-        map.current.fitBounds(
-          [[minLng - 0.01, minLat - 0.01], [maxLng + 0.01, maxLat + 0.01]],
-          { padding: 40, maxZoom: 15 }
-        );
-      }
+      map.current!.addLayer({
+        id: layerId,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': territory.color,
+          'fill-opacity': 0.4,
+        },
+      });
+
+      map.current!.addLayer({
+        id: outlineId,
+        type: 'line',
+        source: sourceId,
+        paint: {
+          'line-color': territory.color,
+          'line-width': 2,
+          'line-opacity': 0.8,
+        },
+      });
+
+      // Add popup on click
+      map.current!.on('click', layerId, (e) => {
+        if (!e.features?.length) return;
+        const props = e.features[0].properties;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div class="p-2">
+              <p class="font-semibold">${props?.username || 'Miembro'}</p>
+              <p class="text-sm text-gray-500">${Math.round(props?.area || 0)} m²</p>
+            </div>
+          `)
+          .addTo(map.current!);
+      });
+
+      map.current!.on('mouseenter', layerId, () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+
+      map.current!.on('mouseleave', layerId, () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
     });
 
-    return () => {
-      map.current?.remove();
-      map.current = null;
-    };
-  }, [mapboxToken, territories]);
+    // Fit bounds to show all territories
+    if (minLng !== Infinity) {
+      map.current.fitBounds(
+        [[minLng - 0.01, minLat - 0.01], [maxLng + 0.01, maxLat + 0.01]],
+        { padding: 40, maxZoom: 15 }
+      );
+    }
+  }, [mapReady, territories]);
 
   if (loading) {
     return (
