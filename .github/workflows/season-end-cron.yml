@@ -1,0 +1,20 @@
+name: Season End Cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  call-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger process-season-end
+        env:
+          SUPABASE_FUNCTION_URL: https://mingyhynzeoawsjnnpwj.functions.supabase.co/process-season-end
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -X POST "$SUPABASE_FUNCTION_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            --data '{"source":"github-cron"}'

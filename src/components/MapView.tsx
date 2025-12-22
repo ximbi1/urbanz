@@ -973,57 +973,48 @@ const MapView = ({
       return;
     }
 
-    // Cargar conquistas de parques (de la tabla + detectar parques dentro de territorios)
+    // Determinar propietario de parques SOLO en base a territorios actuales.
+    // Regla: parque dentro = dueño del territorio; fuera = neutral.
     const loadParkConquests = async () => {
-      // Primero cargar conquistas explícitas de la tabla park_conquests
-      const { data } = await supabase
-        .from('park_conquests')
-        .select('park_id, profiles:user_id(username, color)');
-      
       const conquests = new Map<string, { owner: string; color: string }>();
-      if (data) {
-        data.forEach((conquest: any) => {
-          conquests.set(conquest.park_id, {
-            owner: conquest.profiles?.username || 'Usuario',
-            color: conquest.profiles?.color || '#22c55e'
-          });
-        });
-      }
 
-      // Ahora detectar parques que están DENTRO de territorios existentes
       const parks = visiblePois.filter(poi => poi.category === 'park' && poi.coordinates?.length >= 3);
-      
-      // Función para verificar si un parque está mayoritariamente dentro de un territorio
-      const isParkInsideTerritory = (parkCoords: Coordinate[], territoryCoords: Coordinate[]) => {
-        if (!parkCoords.length || !territoryCoords.length) return false;
-        
-        // Verificar múltiples puntos del parque (centroide + vértices)
-        const parkCentroid = calculateCentroid(parkCoords);
-        
-        // Si el centroide está dentro, el parque está conquistado
-        if (isPointInPolygon(parkCentroid, territoryCoords)) return true;
-        
-        // Verificar si al menos 50% de los vértices del parque están dentro del territorio
-        const pointsInside = parkCoords.filter(coord => 
-          isPointInPolygon(coord, territoryCoords)
-        ).length;
-        
-        return pointsInside >= Math.ceil(parkCoords.length * 0.5);
-      };
-      
-      parks.forEach(park => {
-        // Si ya tiene conquista explícita, no sobrescribir
-        if (conquests.has(park.id)) return;
 
+      const midpoint = (a: Coordinate, b: Coordinate): Coordinate => ({
+        lat: (a.lat + b.lat) / 2,
+        lng: (a.lng + b.lng) / 2,
+      });
+
+      // Heurística robusta de contención: muestreamos vértices + puntos medios + centroide.
+      // Solo se considera "dentro" si >= 90% de los puntos muestreados están dentro del territorio.
+      const isParkInsideTerritory = (parkCoords: Coordinate[], territoryCoords: Coordinate[]) => {
+        if (parkCoords.length < 3 || territoryCoords.length < 3) return false;
+
+        const parkCentroid = calculateCentroid(parkCoords);
+        const midpoints: Coordinate[] = [];
+        for (let i = 0; i < parkCoords.length; i++) {
+          const a = parkCoords[i];
+          const b = parkCoords[(i + 1) % parkCoords.length];
+          midpoints.push(midpoint(a, b));
+        }
+
+        const samplePoints = [parkCentroid, ...parkCoords, ...midpoints];
+        const insideCount = samplePoints.filter(p => isPointInPolygon(p, territoryCoords)).length;
+        const ratio = insideCount / Math.max(samplePoints.length, 1);
+
+        return ratio >= 0.9;
+      };
+
+      parks.forEach(park => {
         for (const territory of territories) {
           if (!territory.coordinates?.length) continue;
-          
+
           if (isParkInsideTerritory(park.coordinates, territory.coordinates)) {
             conquests.set(park.id, {
               owner: territory.owner || 'Usuario',
-              color: territory.color || '#22c55e'
+              color: territory.color || '#22c55e',
             });
-            break; // Ya encontramos el dueño, no seguir buscando
+            break;
           }
         }
       });

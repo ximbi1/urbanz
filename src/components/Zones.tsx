@@ -26,11 +26,6 @@ interface TerritoryItem {
   coordinates: Coordinate[];
 }
 
-interface ParkConquest {
-  park_id: string;
-  user_id: string;
-  owner_name: string;
-}
 
 const isPointInPolygon = (point: Coordinate, polygon: Coordinate[]) => {
   let inside = false;
@@ -70,17 +65,34 @@ const formatDistance = (meters: number | null) => {
   return `${Math.round(meters)} m`;
 };
 
+const isPolygonMostlyContained = (inner: Coordinate[], outer: Coordinate[]) => {
+  if (inner.length < 3 || outer.length < 3) return false;
+
+  const centroid = getCentroid(inner);
+  const midpoints: Coordinate[] = [];
+  for (let i = 0; i < inner.length; i++) {
+    const a = inner[i];
+    const b = inner[(i + 1) % inner.length];
+    midpoints.push({ lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+  }
+
+  const samplePoints = [centroid, ...inner, ...midpoints];
+  const insideCount = samplePoints.filter((p) => isPointInPolygon(p, outer)).length;
+  return insideCount / Math.max(samplePoints.length, 1) >= 0.9;
+};
+
+
 type OwnerFilter = 'all' | 'free' | 'owned';
 
 const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesProps) => {
   const [pois, setPois] = useState<PoiItem[]>([]);
   const [territories, setTerritories] = useState<TerritoryItem[]>([]);
-  const [parkConquests, setParkConquests] = useState<ParkConquest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'parks' | 'districts'>('parks');
   const [userLocation, setUserLocation] = useState<Coordinate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
+
 
   useEffect(() => {
     const fetchPois = async () => {
@@ -123,21 +135,9 @@ const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesPro
       }
     };
 
-    const fetchParkConquests = async () => {
-      const { data, error } = await supabase
-        .from('park_conquests')
-        .select('park_id, user_id, owner:profiles!park_conquests_user_id_fkey(username)');
-      if (!error && data) {
-        setParkConquests(data.map((pc: any) => ({
-          park_id: pc.park_id,
-          user_id: pc.user_id,
-          owner_name: pc.owner?.username || 'Desconocido',
-        })));
-      }
-    };
-
-    Promise.all([fetchPois(), fetchTerritories(), fetchParkConquests()]).finally(() => setLoading(false));
+    await Promise.all([fetchPois(), fetchTerritories()]).finally(() => setLoading(false));
   }, []);
+
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
@@ -165,24 +165,21 @@ const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesPro
 
   const rows = useMemo(() => {
     const isParksTab = tab === 'parks';
-    
+
     return pois
       .filter(p => isParksTab ? p.category === 'park' : p.category === 'district')
       .map(poi => {
         const centroid = getCentroid(poi.coordinates);
-        
-        // For parks, check park_conquests table first
-        let owner: string | null = null;
-        if (isParksTab) {
-          const conquest = parkConquests.find(pc => pc.park_id === poi.id);
-          if (conquest) {
-            owner = conquest.owner_name;
-          }
-        } else {
-          // For districts, use territory overlap logic
-          owner = territories.find(t => isPointInPolygon(centroid, t.coordinates))?.owner || null;
-        }
-        
+
+        // Regla unificada: parques y barrios se derivan SOLO de territorios actuales.
+        // parque dentro = dueño del territorio; fuera = neutral.
+        const owner = territories.find((t) => {
+          if (!t.coordinates?.length || !poi.coordinates?.length) return false;
+          return isParksTab
+            ? isPolygonMostlyContained(poi.coordinates, t.coordinates)
+            : isPointInPolygon(centroid, t.coordinates);
+        })?.owner || null;
+
         const perimeter = calculatePerimeter(poi.coordinates);
         const distance = userLocation ? distanceBetween(userLocation, centroid) : null;
         return {
@@ -212,7 +209,8 @@ const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesPro
         if (b.distance == null) return -1;
         return a.distance - b.distance;
       });
-  }, [pois, tab, territories, parkConquests, userLocation, searchQuery, ownerFilter]);
+  }, [pois, tab, territories, userLocation, searchQuery, ownerFilter]);
+
 
   const handleNavigateToZone = (zone: { coordinates: Coordinate; category: 'park' | 'district'; id: string }) => {
     if (onNavigateToZone) {

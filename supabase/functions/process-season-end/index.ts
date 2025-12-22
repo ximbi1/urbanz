@@ -50,7 +50,24 @@ Deno.serve(async (req) => {
       throw new Error('No active season found');
     }
 
-    console.log('Active season:', activeSeason.name);
+    const now = new Date();
+    const seasonEnd = new Date(activeSeason.end_date);
+
+    // Si la temporada aún no ha terminado, no hacer nada (para poder invocarlo con cron cada X minutos).
+    if (seasonEnd.getTime() > now.getTime()) {
+      console.log('Season still active. Skipping. End date:', activeSeason.end_date);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'Season not ended yet',
+          season: { id: activeSeason.id, name: activeSeason.name, end_date: activeSeason.end_date },
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Active season ended. Processing:', activeSeason.name);
 
     // Obtener todos los perfiles ordenados por season_points
     const { data: profiles, error: profilesError } = await supabase
@@ -79,9 +96,11 @@ Deno.serve(async (req) => {
     });
 
     // Procesar cada usuario
+    const leaguesOrder = ['bronze', 'silver', 'gold', 'diamond', 'legend'] as const;
+
     for (const league in leagueGroups) {
       const usersInLeague = leagueGroups[league];
-      usersInLeague.sort((a, b) => b.season_points - a.season_points);
+      usersInLeague.sort((a, b) => (Number(b.season_points || 0) - Number(a.season_points || 0)));
 
       for (let index = 0; index < usersInLeague.length; index++) {
         const profile = usersInLeague[index];
@@ -90,21 +109,19 @@ Deno.serve(async (req) => {
 
         // Determinar nueva liga
         let newLeague = league;
-        
+
+        const currentIndex = leaguesOrder.indexOf(league as any);
+
         // Top 20% promocionan (excepto Leyenda)
         if (league !== 'legend' && rank <= Math.ceil(totalInLeague * 0.2)) {
-          const leagues = ['bronze', 'silver', 'gold', 'diamond', 'legend'];
-          const currentIndex = leagues.indexOf(league);
-          if (currentIndex < leagues.length - 1) {
-            newLeague = leagues[currentIndex + 1];
+          if (currentIndex >= 0 && currentIndex < leaguesOrder.length - 1) {
+            newLeague = leaguesOrder[currentIndex + 1];
           }
         }
         // Bottom 20% descienden (excepto Bronce)
         else if (league !== 'bronze' && rank > Math.ceil(totalInLeague * 0.8)) {
-          const leagues = ['bronze', 'silver', 'gold', 'diamond', 'legend'];
-          const currentIndex = leagues.indexOf(league);
           if (currentIndex > 0) {
-            newLeague = leagues[currentIndex - 1];
+            newLeague = leaguesOrder[currentIndex - 1];
           }
         }
 
@@ -114,7 +131,7 @@ Deno.serve(async (req) => {
           .insert({
             user_id: profile.id,
             season_id: activeSeason.id,
-            final_points: profile.season_points,
+            final_points: Number(profile.season_points || 0),
             final_league: league,
             final_rank: rank,
             territories_conquered: profile.total_territories,
@@ -131,6 +148,11 @@ Deno.serve(async (req) => {
           })
           .eq('id', profile.id);
 
+        const prevIndex = leaguesOrder.indexOf(league as any);
+        const nextIndex = leaguesOrder.indexOf(newLeague as any);
+        const movedUp = nextIndex > prevIndex;
+        const movedDown = nextIndex < prevIndex;
+
         // Crear notificación
         await supabase
           .from('notifications')
@@ -139,31 +161,52 @@ Deno.serve(async (req) => {
             type: 'season_end',
             title: '¡Temporada finalizada!',
             message: `Has terminado en la posición ${rank} de ${LEAGUES[league].name}. ${
-              newLeague !== league 
-                ? newLeague > league 
-                  ? `¡Has ascendido a ${LEAGUES[newLeague].name}!` 
-                  : `Has descendido a ${LEAGUES[newLeague].name}.`
-                : 'Te mantienes en tu liga.'
+              movedUp
+                ? `¡Has ascendido a ${LEAGUES[newLeague].name}!`
+                : movedDown
+                  ? `Has descendido a ${LEAGUES[newLeague].name}.`
+                  : 'Te mantienes en tu liga.'
             }`,
           });
       }
     }
 
-    // Borrar todos los territorios
-    const { error: deleteError } = await supabase
-      .from('territories')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Borrar todos
 
-    if (deleteError) {
-      console.error('Error deleting territories:', deleteError);
-    }
+    // Borrar conquistas de parques (mapa) + escudos + territorios
+    const [{ error: deleteParkConquestsError }, { error: deleteShieldsError }, { error: deleteEventsError }, { error: deleteTerritoriesError }] = await Promise.all([
+      supabase
+        .from('park_conquests')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase
+        .from('territory_shields')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase
+        .from('territory_events')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase
+        .from('territories')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'),
+    ]);
+
+    if (deleteParkConquestsError) console.error('Error deleting park conquests:', deleteParkConquestsError);
+    if (deleteShieldsError) console.error('Error deleting territory shields:', deleteShieldsError);
+    if (deleteEventsError) console.error('Error deleting territory events:', deleteEventsError);
+    if (deleteTerritoriesError) console.error('Error deleting territories:', deleteTerritoriesError);
+
+    // Rebalancear shards de liga tras actualizar ligas
+    const { error: rebalanceError } = await supabase.rpc('rebalance_league_shards', { shard_size: 200 });
+    if (rebalanceError) console.error('Error rebalancing league shards:', rebalanceError);
 
     // Desactivar temporada actual
     await supabase
       .from('seasons')
       .update({ active: false })
       .eq('id', activeSeason.id);
+
 
     // Crear nueva temporada (20 días)
     const { error: newSeasonError } = await supabase

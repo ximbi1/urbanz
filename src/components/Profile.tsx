@@ -74,6 +74,12 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [bestSeasonResult, setBestSeasonResult] = useState<{
+    seasonName?: string | null;
+    finalPoints: number;
+    finalLeague: string;
+    finalRank: number;
+  } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -88,7 +94,7 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
   const { unlockedAchievements } = useAchievements();
   const levelInfo = profile ? calculateLevel(profile.total_points) : null;
   const { settings: playerSettings, updateSettings } = usePlayerSettings();
-  
+
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
@@ -99,8 +105,10 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
       loadRuns();
       loadDefenseData();
       loadUserClan();
+      loadBestSeasonResult();
     }
   }, [user]);
+
 
   const loadProfile = async () => {
     if (!user) return;
@@ -681,9 +689,34 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
             <Progress value={levelInfo.progressPercentage} className="h-2" />
           </div>
         )}
+        {/* Liga actual + mejor temporada */}
+        <Card className="p-4 bg-muted/30 border-border">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs uppercase text-muted-foreground tracking-wider">Liga actual</p>
+              <p className="text-lg font-display font-bold text-primary">{leagueLabel(profile?.current_league)}</p>
+              <p className="text-xs text-muted-foreground">Shard: {profile?.league_shard || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-muted-foreground tracking-wider">Mejor temporada</p>
+              {bestSeasonResult ? (
+                <div>
+                  <p className="text-lg font-display font-bold">{bestSeasonResult.finalPoints} pts</p>
+                  <p className="text-xs text-muted-foreground">
+                    {leagueLabel(bestSeasonResult.finalLeague)} · #{bestSeasonResult.finalRank}
+                    {bestSeasonResult.seasonName ? ` · ${bestSeasonResult.seasonName}` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Aún sin temporadas</p>
+              )}
+            </div>
+          </div>
+        </Card>
 
         {/* Stats */}
         <div className="space-y-4">
+
           <div className="grid grid-cols-2 gap-4">
             <Card className="p-4 bg-muted/30 border-border text-center">
               <div className="flex justify-center mb-2">
@@ -1039,7 +1072,32 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
           </Card>
         )}
 
+        <Card className="p-4 bg-muted/30 border-border">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs uppercase text-muted-foreground tracking-wider">Liga actual</p>
+              <p className="text-lg font-display font-bold text-primary">{leagueLabel(profile?.current_league)}</p>
+              <p className="text-xs text-muted-foreground">Shard: {profile?.league_shard || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-muted-foreground tracking-wider">Mejor temporada</p>
+              {bestSeasonResult ? (
+                <div>
+                  <p className="text-lg font-display font-bold">{bestSeasonResult.finalPoints} pts</p>
+                  <p className="text-xs text-muted-foreground">
+                    {leagueLabel(bestSeasonResult.finalLeague)} · #{bestSeasonResult.finalRank}
+                    {bestSeasonResult.seasonName ? ` · ${bestSeasonResult.seasonName}` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Aún sin temporadas</p>
+              )}
+            </div>
+          </div>
+        </Card>
+
         {/* ... keep existing code (all profile content) */}
+
 
         {showAchievements && (
           <Achievements onClose={() => setShowAchievements(false)} />
