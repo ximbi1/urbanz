@@ -146,6 +146,39 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
     }
   };
 
+  const loadBestSeasonResult = async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('season_results')
+      .select('final_points, final_league, final_rank, season:seasons(name)')
+      .eq('user_id', user.id)
+      .order('final_points', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data) {
+      setBestSeasonResult({
+        finalPoints: data.final_points,
+        finalLeague: data.final_league,
+        finalRank: data.final_rank,
+        seasonName: (data.season as any)?.name || null,
+      });
+    }
+  };
+
+  const leagueLabel = (league: string | null | undefined) => {
+    const labels: Record<string, string> = {
+      bronze: 'Bronce',
+      silver: 'Plata',
+      gold: 'Oro',
+      platinum: 'Platino',
+      diamond: 'Diamante',
+      legend: 'Leyenda',
+    };
+    return labels[league || ''] || 'Sin liga';
+  };
+
   const loadRuns = async () => {
     if (!user) return;
     
