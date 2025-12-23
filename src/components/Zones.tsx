@@ -135,7 +135,7 @@ const Zones = ({ onClose, onNavigateToZone, isMobileFullPage = false }: ZonesPro
       }
     };
 
-    await Promise.all([fetchPois(), fetchTerritories()]).finally(() => setLoading(false));
+    Promise.all([fetchPois(), fetchTerritories()]).finally(() => setLoading(false));
   }, []);
 
 
