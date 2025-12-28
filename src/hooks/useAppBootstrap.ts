@@ -1,55 +1,119 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   getOfflineRuns,
   removeOfflineRun,
   shouldAttemptRun,
   markOfflineRunFailed,
-  OfflineRunEntry,
 } from '@/utils/offlineQueue';
+
+export type BootstrapPhase = 'init' | 'syncing' | 'refreshing' | 'done';
 
 export interface BootstrapState {
   isBootstrapping: boolean;
+  phase: BootstrapPhase;
   syncedCount: number;
   totalPending: number;
   error: string | null;
 }
 
 /**
- * Hook that handles initial app bootstrap including offline sync.
- * Should be used at the app root level to sync before showing content.
+ * Hook that handles initial app bootstrap:
+ * 1. Syncs offline runs
+ * 2. Prefetches fresh data (territories, runs, profiles)
  */
 export const useAppBootstrap = () => {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<BootstrapState>({
     isBootstrapping: true,
+    phase: 'init',
     syncedCount: 0,
     totalPending: 0,
     error: null,
   });
   const hasRun = useRef(false);
 
+  const prefetchData = useCallback(async () => {
+    if (!navigator.onLine) return;
+
+    setState(prev => ({ ...prev, phase: 'refreshing' }));
+
+    try {
+      // Prefetch territories (main map data)
+      await queryClient.prefetchQuery({
+        queryKey: ['territories'],
+        queryFn: async () => {
+          const { data } = await supabase
+            .from('territories')
+            .select('*')
+            .order('created_at', { ascending: false });
+          return data ?? [];
+        },
+        staleTime: 0, // Force fresh data
+      });
+
+      // Prefetch recent runs for activity feed
+      await queryClient.prefetchQuery({
+        queryKey: ['recent-runs'],
+        queryFn: async () => {
+          const { data } = await supabase
+            .from('runs')
+            .select('*, profiles:user_id(username, avatar_url, color)')
+            .order('created_at', { ascending: false })
+            .limit(50);
+          return data ?? [];
+        },
+        staleTime: 0,
+      });
+
+      // Prefetch user profile if logged in
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        await queryClient.prefetchQuery({
+          queryKey: ['profile', userData.user.id],
+          queryFn: async () => {
+            const { data } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userData.user.id)
+              .single();
+            return data;
+          },
+          staleTime: 0,
+        });
+      }
+    } catch (error) {
+      console.error('Prefetch error:', error);
+      // Non-blocking - app can still load
+    }
+  }, [queryClient]);
+
   const performInitialSync = useCallback(async () => {
-    // Skip if not online
+    // Skip if not online - just finish bootstrap
     if (!navigator.onLine) {
-      setState(prev => ({ ...prev, isBootstrapping: false }));
+      setState(prev => ({ ...prev, isBootstrapping: false, phase: 'done' }));
       return;
     }
 
     const queue = getOfflineRuns().filter(shouldAttemptRun);
+    
+    // If no pending runs, go straight to prefetch
     if (queue.length === 0) {
-      setState(prev => ({ ...prev, isBootstrapping: false }));
+      await prefetchData();
+      setState(prev => ({ ...prev, isBootstrapping: false, phase: 'done' }));
       return;
     }
 
-    setState(prev => ({ ...prev, totalPending: queue.length }));
+    setState(prev => ({ ...prev, phase: 'syncing', totalPending: queue.length }));
 
     try {
       const { data } = await supabase.auth.getUser();
       const currentUser = data?.user;
       
       if (!currentUser) {
-        // No user logged in, can't sync
-        setState(prev => ({ ...prev, isBootstrapping: false }));
+        await prefetchData();
+        setState(prev => ({ ...prev, isBootstrapping: false, phase: 'done' }));
         return;
       }
 
@@ -81,27 +145,32 @@ export const useAppBootstrap = () => {
         }
       }
 
+      // After syncing, prefetch fresh data
+      await prefetchData();
+
       setState(prev => ({
         ...prev,
         isBootstrapping: false,
+        phase: 'done',
         syncedCount,
       }));
     } catch (error) {
       console.error('Bootstrap sync error', error);
+      // Still try to prefetch even on error
+      await prefetchData();
       setState(prev => ({
         ...prev,
         isBootstrapping: false,
+        phase: 'done',
         error: 'Error al sincronizar carreras pendientes',
       }));
     }
-  }, []);
+  }, [prefetchData]);
 
   useEffect(() => {
-    // Only run once on mount
     if (hasRun.current) return;
     hasRun.current = true;
 
-    // Small delay to let splash screen show
     const timer = setTimeout(() => {
       performInitialSync();
     }, 100);

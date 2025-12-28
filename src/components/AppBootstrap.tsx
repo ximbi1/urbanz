@@ -6,7 +6,37 @@ interface AppBootstrapProps {
 }
 
 const SplashScreen = memo(({ state }: { state: BootstrapState }) => {
-  const hasPending = state.totalPending > 0;
+  const hasPending = state.totalPending > 0 && state.phase === 'syncing';
+  const isRefreshing = state.phase === 'refreshing';
+  
+  const getMessage = () => {
+    if (hasPending) {
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-muted-foreground">Sincronizando carreras...</p>
+          <p className="text-sm text-muted-foreground/70">
+            {state.syncedCount} / {state.totalPending}
+          </p>
+          <div className="w-32 h-1 bg-muted rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${(state.syncedCount / state.totalPending) * 100}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+    
+    if (isRefreshing) {
+      return (
+        <p className="text-muted-foreground animate-pulse">Actualizando datos...</p>
+      );
+    }
+    
+    return (
+      <p className="text-muted-foreground animate-pulse">Cargando URBANZ...</p>
+    );
+  };
   
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -17,23 +47,7 @@ const SplashScreen = memo(({ state }: { state: BootstrapState }) => {
             <span className="text-2xl font-display font-bold text-primary-foreground">U</span>
           </div>
         </div>
-        
-        {hasPending ? (
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-muted-foreground">Sincronizando carreras...</p>
-            <p className="text-sm text-muted-foreground/70">
-              {state.syncedCount} / {state.totalPending}
-            </p>
-            <div className="w-32 h-1 bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all duration-300 ease-out"
-                style={{ width: `${(state.syncedCount / state.totalPending) * 100}%` }}
-              />
-            </div>
-          </div>
-        ) : (
-          <p className="text-muted-foreground animate-pulse">Cargando URBANZ...</p>
-        )}
+        {getMessage()}
       </div>
     </div>
   );
@@ -41,8 +55,9 @@ const SplashScreen = memo(({ state }: { state: BootstrapState }) => {
 SplashScreen.displayName = 'SplashScreen';
 
 /**
- * Wrapper component that handles app initialization and offline sync
- * before showing the main content.
+ * Wrapper component that handles app initialization:
+ * 1. Syncs offline runs
+ * 2. Prefetches fresh data before showing the app
  */
 export const AppBootstrap = memo(({ children }: AppBootstrapProps) => {
   const state = useAppBootstrap();
