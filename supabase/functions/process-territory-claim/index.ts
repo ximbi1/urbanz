@@ -961,6 +961,7 @@ Deno.serve(async (req) => {
                 social_participants: newParticipants,
                 points: (primarySocial.points || 0) + rewardPoints,
                 conquest_points: (primarySocial.conquest_points || 0) + rewardPoints,
+                league_shard: 'social', // Mundos separados: Liga Social tiene su propio shard
               })
               .eq('id', primarySocial.id)
             
@@ -1037,7 +1038,8 @@ Deno.serve(async (req) => {
                 status: 'protected',
                 conquest_points: adjustedReward,
                 points: adjustedReward,
-                league_shard: profile.league_shard || 'bronze-1',
+                // Mundos separados: Liga Social usa 'social', competitivo usa league_shard normal
+                league_shard: isSocialLeague ? 'social' : (profile.league_shard || 'bronze-1'),
                 is_social: isSocialLeague,
                 social_participants: isSocialLeague ? [user.id] : null,
               })
@@ -1485,6 +1487,7 @@ Deno.serve(async (req) => {
                     social_participants: newParticipants,
                     points: (socialTerr.points || 0) + rewardPoints,
                     conquest_points: (socialTerr.conquest_points || 0) + rewardPoints,
+                    league_shard: 'social', // Mundos separados
                   })
                   .eq('id', socialTerr.id)
                 
@@ -1537,7 +1540,8 @@ Deno.serve(async (req) => {
             status: 'protected',
             conquest_points: rewardPoints,
             points: rewardPoints,
-            league_shard: profile.league_shard || 'bronze-1',
+            // Mundos separados: Liga Social usa 'social', competitivo usa league_shard normal
+            league_shard: isSocialLeague ? 'social' : (profile.league_shard || 'bronze-1'),
             is_social: isSocialLeague,
             social_participants: isSocialLeague ? [user.id] : null,
           })
