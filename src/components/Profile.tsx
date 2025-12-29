@@ -1,4 +1,4 @@
-import { X, Trophy, MapPin, Route, Trash2, Edit2, Upload, User, Award, LogOut, TrendingUp, Info, FileUp, ShieldHalf, ShieldCheck, Loader2, Shield, Ruler, HelpCircle } from 'lucide-react';
+import { X, Trophy, MapPin, Route, Trash2, Edit2, Upload, User, Award, LogOut, TrendingUp, Info, FileUp, ShieldHalf, ShieldCheck, Loader2, Shield, Ruler, HelpCircle, Settings } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './PullToRefreshIndicator';
 import { Switch } from '@/components/ui/switch';
 import { usePlayerSettings } from '@/hooks/usePlayerSettings';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 
 const profileSchema = z.object({
   username: z.string().min(3, 'El nombre debe tener al menos 3 caracteres').max(20, 'El nombre no puede tener más de 20 caracteres'),
@@ -514,51 +515,71 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
           <h2 className="text-2xl font-display font-bold glow-primary">
             Perfil
           </h2>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            <Edit2 className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Settings className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80">
+                <SheetHeader>
+                  <SheetTitle>Configuración de juego</SheetTitle>
+                  <SheetDescription>
+                    Ajusta cómo quieres competir en Urbanz
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-6 space-y-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold">Modo explorador</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Guarda rutas personales sin disputar territorios. Ideal para entrenar sin afectar el mapa.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={playerSettings.explorerMode}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await updateSettings({ explorerMode: checked });
+                          toast.success(checked ? 'Modo explorador activado' : 'Modo competitivo activado');
+                        } catch (error) {
+                          toast.error('No se pudo actualizar el modo');
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold">Liga social</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Colabora con otros runners. Tus territorios no pueden ser robados por otros jugadores.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={playerSettings.socialLeague}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await updateSettings({ socialLeague: checked });
+                          toast.success(checked ? 'Liga social activada' : 'Liga social desactivada');
+                        } catch (error) {
+                          toast.error('No se pudo actualizar la liga social');
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              <Edit2 className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
-
-        <Card className="p-4 border border-border flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">Modo explorador</p>
-              <p className="text-xs text-muted-foreground">Guarda rutas personales sin disputar territorios</p>
-            </div>
-            <Switch
-              checked={playerSettings.explorerMode}
-              onCheckedChange={async (checked) => {
-                try {
-                  await updateSettings({ explorerMode: checked });
-                  toast.success(checked ? 'Modo explorador activado' : 'Modo competitivo activado');
-                } catch (error) {
-                  toast.error('No se pudo actualizar el modo');
-                }
-              }}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold">Liga social</p>
-              <p className="text-xs text-muted-foreground">Colabora con otros runners sin perder territorios</p>
-            </div>
-            <Switch
-              checked={playerSettings.socialLeague}
-              onCheckedChange={async (checked) => {
-                try {
-                  await updateSettings({ socialLeague: checked });
-                  toast.success(checked ? 'Liga social activada' : 'Liga social desactivada');
-                } catch (error) {
-                  toast.error('No se pudo actualizar la liga social');
-                }
-              }}
-            />
-          </div>
-        </Card>
 
         {/* Información del Usuario */}
         {!isEditing ? (
