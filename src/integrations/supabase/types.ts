@@ -679,6 +679,7 @@ export type Database = {
           mission_type: string
           reward_points: number
           reward_shields: number
+          rotation_slot: number | null
           start_date: string
           target_count: number
           title: string
@@ -692,6 +693,7 @@ export type Database = {
           mission_type: string
           reward_points?: number
           reward_shields?: number
+          rotation_slot?: number | null
           start_date?: string
           target_count?: number
           title: string
@@ -705,6 +707,7 @@ export type Database = {
           mission_type?: string
           reward_points?: number
           reward_shields?: number
+          rotation_slot?: number | null
           start_date?: string
           target_count?: number
           title?: string
