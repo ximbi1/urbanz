@@ -30,7 +30,7 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('total_points, current_streak')
+        .select('username, total_points, current_streak')
         .eq('id', user?.id)
         .single();
 
@@ -93,9 +93,11 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
               alt="URBANZ" 
               className="w-12 h-12 rounded-xl object-contain"
             />
-            <h1 className="text-2xl font-display font-bold glow-primary">
-              URBANZ
-            </h1>
+            {profile?.username && (
+              <h1 className="text-xl font-display font-bold text-foreground">
+                {profile.username}
+              </h1>
+            )}
           </div>
           
           {profile && levelInfo && (
