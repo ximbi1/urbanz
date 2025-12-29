@@ -91,7 +91,7 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
             <img 
               src={logoUrbanz} 
               alt="URBANZ" 
-              className="h-14 w-auto object-contain -my-1"
+              className="h-[72px] w-auto object-contain -my-2"
             />
             <h1 className="text-2xl font-display font-bold glow-primary">
               URBANZ
