@@ -202,16 +202,15 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
     updatePathSlice(targetIndex);
     runnerMarkerRef.current?.setLngLat(coordsRef.current[targetIndex]);
 
-    // Animate emoji between running poses every ~150ms
-    const frameInterval = 150;
-    const currentFrame = Math.floor(elapsed / frameInterval) % 4;
+    // Animate emoji alternating walk/run every ~200ms for running effect
+    const frameInterval = 200;
+    const currentFrame = Math.floor(elapsed / frameInterval) % 2;
     if (currentFrame !== emojiFrameRef.current && runnerElementRef.current) {
       emojiFrameRef.current = currentFrame;
-      // Alternate between running emojis for animation effect
-      const emojis = ['🏃', '🏃‍♂️', '🏃', '🏃‍♀️'];
-      runnerElementRef.current.textContent = emojis[currentFrame];
-      // Add slight bounce effect
-      runnerElementRef.current.style.transform = currentFrame % 2 === 0 ? 'translateY(-2px)' : 'translateY(0)';
+      // Alternate between walking and running for animation effect
+      runnerElementRef.current.textContent = currentFrame === 0 ? '🏃' : '🚶';
+      // Add bounce effect
+      runnerElementRef.current.style.transform = currentFrame === 0 ? 'translateY(-3px)' : 'translateY(0)';
     }
 
     if (mapRef.current && coordsRef.current[targetIndex]) {
