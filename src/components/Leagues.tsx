@@ -1,4 +1,4 @@
-import { X, Trophy, Medal, MapPin, Route, Crown, Gem, Award } from 'lucide-react';
+import { X, Trophy, Medal, MapPin, Route, Crown, Gem, Award, Users } from 'lucide-react';
 import { ContentSkeleton } from './ui/content-skeleton';
 import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,7 @@ interface LeagueEntry {
   id: string;
   username: string;
   season_points: number;
+  social_points: number;
   total_points: number;
   current_league: string;
   color: string;
@@ -53,8 +54,9 @@ const LEAGUE_CONFIG = {
 const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
   const [myLeagueRankings, setMyLeagueRankings] = useState<LeagueEntry[]>([]);
   const [friendsLeagues, setFriendsLeagues] = useState<LeagueEntry[]>([]);
+  const [socialLeagueRankings, setSocialLeagueRankings] = useState<LeagueEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'my-league' | 'friends'>('my-league');
+  const [viewMode, setViewMode] = useState<'my-league' | 'friends' | 'social'>('my-league');
   const [currentSeason, setCurrentSeason] = useState<Season | null>(null);
   const [userLeague, setUserLeague] = useState<string>('bronze');
   const [topClans, setTopClans] = useState<ClanHighlight[]>([]);
@@ -65,6 +67,7 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
     loadUserLeague();
     loadMyLeagueRankings();
     loadFriendsLeagues();
+    loadSocialLeagueRankings();
     loadTopClans();
   }, []);
 
@@ -118,21 +121,24 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
       // Obtener top 30 de la misma liga, ordenados por puntos
       let { data, error } = await supabase
         .from('profiles')
-        .select('id, username, season_points, total_points, current_league, color, avatar_url')
+        .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
         .eq('current_league', league)
         .limit(30);
 
       if (error) throw error;
       
       // Ordenar manualmente por season_points o total_points (el que sea mayor)
-      data = data?.sort((a, b) => {
+      const sorted = (data || []).map(p => ({
+        ...p,
+        social_points: p.social_points ?? 0,
+      })).sort((a, b) => {
         const pointsA = Math.max(a.season_points || 0, a.total_points || 0);
         const pointsB = Math.max(b.season_points || 0, b.total_points || 0);
         return pointsB - pointsA;
-      }) || [];
+      });
 
       
-      setMyLeagueRankings(data || []);
+      setMyLeagueRankings(sorted);
     } catch (error) {
       console.error('Error loading league rankings:', error);
       toast.error('Error al cargar la liga');
@@ -167,22 +173,49 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
       // Obtener perfiles de amigos + incluir al usuario actual
       let { data, error } = await supabase
         .from('profiles')
-        .select('id, username, season_points, total_points, current_league, color, avatar_url')
+        .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
         .in('id', [...friendIds, user.id]);
 
       if (error) throw error;
 
       // Ordenar manualmente por season_points o total_points (el que sea mayor)
-      data = data?.sort((a, b) => {
+      const sorted = (data || []).map(p => ({
+        ...p,
+        social_points: p.social_points ?? 0,
+      })).sort((a, b) => {
         const pointsA = Math.max(a.season_points || 0, a.total_points || 0);
         const pointsB = Math.max(b.season_points || 0, b.total_points || 0);
         return pointsB - pointsA;
-      }) || [];
+      });
 
 
-      setFriendsLeagues(data || []);
+      setFriendsLeagues(sorted);
     } catch (error) {
       console.error('Error loading friends leagues:', error);
+    }
+  };
+
+  const loadSocialLeagueRankings = async () => {
+    try {
+      // Obtener top 30 de Liga Social ordenados por social_points
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
+        .eq('social_league', true)
+        .gt('social_points', 0)
+        .order('social_points', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+      
+      const sorted = (data || []).map(p => ({
+        ...p,
+        social_points: p.social_points ?? 0,
+      }));
+
+      setSocialLeagueRankings(sorted);
+    } catch (error) {
+      console.error('Error loading social league rankings:', error);
     }
   };
 
@@ -273,16 +306,67 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
           </div>
 
           {/* Selector de modo */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'my-league' | 'friends')} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'my-league' | 'friends' | 'social')} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="my-league">Mi Liga</TabsTrigger>
-              <TabsTrigger value="friends">Ligas de Amigos</TabsTrigger>
+              <TabsTrigger value="friends">Amigos</TabsTrigger>
+              <TabsTrigger value="social" className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                Social
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
           <div className="space-y-2 overflow-auto flex-1">
             {loading ? (
               <ContentSkeleton type="ranking" count={6} />
+            ) : viewMode === 'social' ? (
+              socialLeagueRankings.length === 0 ? (
+                <EmptyState 
+                  type="achievements"
+                  title="Sin corredores sociales"
+                  description="Aún no hay corredores en la Liga Social"
+                />
+              ) : (
+                socialLeagueRankings.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                      entry.id === user?.id
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-border bg-muted/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-500/20 border border-green-500/30 font-display font-bold flex-shrink-0 text-green-400">
+                      {getMedalIcon(index) || index + 1}
+                    </div>
+                    
+                    <Avatar className="w-10 h-10 border-2 border-background flex-shrink-0" style={{ borderColor: entry.color }}>
+                      <AvatarImage src={entry.avatar_url || undefined} alt={entry.username} />
+                      <AvatarFallback className="text-sm font-semibold">
+                        {entry.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{entry.username}</div>
+                      <div className="text-xs text-green-400 flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        Liga Social
+                      </div>
+                    </div>
+                    
+                    <div className="text-right flex-shrink-0">
+                      <div className="font-display font-bold text-green-400">
+                        {entry.social_points}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        pts sociales
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
             ) : viewMode === 'my-league' ? (
               myLeagueRankings.length === 0 ? (
                 <EmptyState 
@@ -407,16 +491,67 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
         </div>
 
         {/* Selector de modo */}
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'my-league' | 'friends')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'my-league' | 'friends' | 'social')} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="my-league">Mi Liga</TabsTrigger>
-            <TabsTrigger value="friends">Ligas de Amigos</TabsTrigger>
+            <TabsTrigger value="friends">Amigos</TabsTrigger>
+            <TabsTrigger value="social" className="flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              Social
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
         <div className="space-y-2 overflow-auto flex-1">
           {loading ? (
             <ContentSkeleton type="ranking" count={6} />
+          ) : viewMode === 'social' ? (
+            socialLeagueRankings.length === 0 ? (
+              <EmptyState 
+                type="achievements"
+                title="Sin corredores sociales"
+                description="Aún no hay corredores en la Liga Social"
+              />
+            ) : (
+              socialLeagueRankings.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                    entry.id === user?.id
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-border bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-500/20 border border-green-500/30 font-display font-bold flex-shrink-0 text-green-400">
+                    {getMedalIcon(index) || index + 1}
+                  </div>
+                  
+                  <Avatar className="w-10 h-10 border-2 border-background flex-shrink-0" style={{ borderColor: entry.color }}>
+                    <AvatarImage src={entry.avatar_url || undefined} alt={entry.username} />
+                    <AvatarFallback className="text-sm font-semibold">
+                      {entry.username.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate">{entry.username}</div>
+                    <div className="text-xs text-green-400 flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      Liga Social
+                    </div>
+                  </div>
+                  
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-display font-bold text-green-400">
+                      {entry.social_points}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      pts sociales
+                    </div>
+                  </div>
+                </div>
+              ))
+            )
           ) : viewMode === 'my-league' ? (
             myLeagueRankings.length === 0 ? (
               <EmptyState 

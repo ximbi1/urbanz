@@ -724,7 +724,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, username, total_points, total_territories, total_distance, season_points, historical_points, league_shard, explorer_mode, social_league')
+      .select('id, username, total_points, total_territories, total_distance, season_points, social_points, historical_points, league_shard, explorer_mode, social_league')
       .eq('id', user.id)
       .single()
 
@@ -977,7 +977,12 @@ Deno.serve(async (req) => {
           territoriesConquered = 1
           
           profileState.total_points = (profileState.total_points || 0) + rewardPoints
-          profileState.season_points = (profileState.season_points || 0) + rewardPoints
+          // Mundos separados: Liga Social suma a social_points, competitivo a season_points
+          if (isSocialLeague) {
+            profileState.social_points = (profileState.social_points || 0) + rewardPoints
+          } else {
+            profileState.season_points = (profileState.season_points || 0) + rewardPoints
+          }
           profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
           profileState.total_distance = (profileState.total_distance || 0) + distance
           
@@ -985,7 +990,9 @@ Deno.serve(async (req) => {
             .from('profiles')
             .update({
               total_points: profileState.total_points,
-              season_points: profileState.season_points,
+              ...(isSocialLeague 
+                ? { social_points: profileState.social_points }
+                : { season_points: profileState.season_points }),
               historical_points: profileState.historical_points,
               total_distance: profileState.total_distance,
             })
@@ -1053,7 +1060,12 @@ Deno.serve(async (req) => {
               pointsGained = adjustedReward
               
               profileState.total_points = (profileState.total_points || 0) + adjustedReward
-              profileState.season_points = (profileState.season_points || 0) + adjustedReward
+              // Mundos separados: Liga Social suma a social_points
+              if (isSocialLeague) {
+                profileState.social_points = (profileState.social_points || 0) + adjustedReward
+              } else {
+                profileState.season_points = (profileState.season_points || 0) + adjustedReward
+              }
               profileState.historical_points = (profileState.historical_points || 0) + adjustedReward
               profileState.total_territories = (profileState.total_territories || 0) + 1
               profileState.total_distance = (profileState.total_distance || 0) + distance
@@ -1062,7 +1074,9 @@ Deno.serve(async (req) => {
                 .from('profiles')
                 .update({
                   total_points: profileState.total_points,
-                  season_points: profileState.season_points,
+                  ...(isSocialLeague 
+                    ? { social_points: profileState.social_points }
+                    : { season_points: profileState.season_points }),
                   historical_points: profileState.historical_points,
                   total_territories: profileState.total_territories,
                   total_distance: profileState.total_distance,
@@ -1241,7 +1255,12 @@ Deno.serve(async (req) => {
             territoriesConquered += 1
             pointsGained += rewardPointsRemainder
             profileState.total_points = (profileState.total_points || 0) + rewardPointsRemainder
-            profileState.season_points = (profileState.season_points || 0) + rewardPointsRemainder
+            // Mundos separados: Liga Social suma a social_points
+            if (isSocialLeague) {
+              profileState.social_points = (profileState.social_points || 0) + rewardPointsRemainder
+            } else {
+              profileState.season_points = (profileState.season_points || 0) + rewardPointsRemainder
+            }
             profileState.historical_points = (profileState.historical_points || 0) + rewardPointsRemainder
             profileState.total_territories = (profileState.total_territories || 0) + 1
           }
@@ -1249,7 +1268,12 @@ Deno.serve(async (req) => {
       }
 
       profileState.total_points = (profileState.total_points || 0) + rewardPointsPartial
-      profileState.season_points = (profileState.season_points || 0) + rewardPointsPartial
+      // Mundos separados: Liga Social suma a social_points
+      if (isSocialLeague) {
+        profileState.social_points = (profileState.social_points || 0) + rewardPointsPartial
+      } else {
+        profileState.season_points = (profileState.season_points || 0) + rewardPointsPartial
+      }
       profileState.historical_points = (profileState.historical_points || 0) + rewardPointsPartial
       profileState.total_territories = (profileState.total_territories || 0) + 1
       profileState.total_distance = (profileState.total_distance || 0) + distance
@@ -1258,7 +1282,9 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({
           total_points: profileState.total_points,
-          season_points: profileState.season_points,
+          ...(isSocialLeague 
+            ? { social_points: profileState.social_points }
+            : { season_points: profileState.season_points }),
           historical_points: profileState.historical_points,
           total_territories: profileState.total_territories,
           total_distance: profileState.total_distance,
@@ -1362,7 +1388,12 @@ Deno.serve(async (req) => {
       action = 'inner_conquest'
       
       profileState.total_points = (profileState.total_points || 0) + rewardPoints
-      profileState.season_points = (profileState.season_points || 0) + rewardPoints
+      // Mundos separados: Liga Social suma a social_points
+      if (isSocialLeague) {
+        profileState.social_points = (profileState.social_points || 0) + rewardPoints
+      } else {
+        profileState.season_points = (profileState.season_points || 0) + rewardPoints
+      }
       profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
       profileState.total_territories = (profileState.total_territories || 0) + 1
       profileState.total_distance = (profileState.total_distance || 0) + distance
@@ -1371,7 +1402,9 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({
           total_points: profileState.total_points,
-          season_points: profileState.season_points,
+          ...(isSocialLeague 
+            ? { social_points: profileState.social_points }
+            : { season_points: profileState.season_points }),
           historical_points: profileState.historical_points,
           total_territories: profileState.total_territories,
           total_distance: profileState.total_distance,
@@ -1496,7 +1529,8 @@ Deno.serve(async (req) => {
                 action = 'conquered'
                 
                 profileState.total_points = (profileState.total_points || 0) + rewardPoints
-                profileState.season_points = (profileState.season_points || 0) + rewardPoints
+                // Mundos separados: Liga Social suma a social_points
+                profileState.social_points = (profileState.social_points || 0) + rewardPoints
                 profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
                 profileState.total_distance = (profileState.total_distance || 0) + distance
                 
@@ -1504,7 +1538,7 @@ Deno.serve(async (req) => {
                   .from('profiles')
                   .update({
                     total_points: profileState.total_points,
-                    season_points: profileState.season_points,
+                    social_points: profileState.social_points,
                     historical_points: profileState.historical_points,
                     total_distance: profileState.total_distance,
                   })
@@ -1557,7 +1591,12 @@ Deno.serve(async (req) => {
         action = 'conquered'
 
         profileState.total_points = (profileState.total_points || 0) + rewardPoints
-        profileState.season_points = (profileState.season_points || 0) + rewardPoints
+        // Mundos separados: Liga Social suma a social_points, competitivo a season_points
+        if (isSocialLeague) {
+          profileState.social_points = (profileState.social_points || 0) + rewardPoints
+        } else {
+          profileState.season_points = (profileState.season_points || 0) + rewardPoints
+        }
         profileState.historical_points = (profileState.historical_points || 0) + rewardPoints
         profileState.total_territories = (profileState.total_territories || 0) + 1
         profileState.total_distance = (profileState.total_distance || 0) + distance
@@ -1566,7 +1605,9 @@ Deno.serve(async (req) => {
           .from('profiles')
           .update({
             total_points: profileState.total_points,
-            season_points: profileState.season_points,
+            ...(isSocialLeague 
+              ? { social_points: profileState.social_points }
+              : { season_points: profileState.season_points }),
             historical_points: profileState.historical_points,
             total_territories: profileState.total_territories,
             total_distance: profileState.total_distance,

@@ -831,6 +831,7 @@ export type Database = {
           previous_league: string | null
           season_points: number | null
           social_league: boolean | null
+          social_points: number | null
           total_distance: number
           total_points: number
           total_territories: number
@@ -853,6 +854,7 @@ export type Database = {
           previous_league?: string | null
           season_points?: number | null
           social_league?: boolean | null
+          social_points?: number | null
           total_distance?: number
           total_points?: number
           total_territories?: number
@@ -875,6 +877,7 @@ export type Database = {
           previous_league?: string | null
           season_points?: number | null
           social_league?: boolean | null
+          social_points?: number | null
           total_distance?: number
           total_points?: number
           total_territories?: number
