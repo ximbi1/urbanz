@@ -159,7 +159,7 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
       const runnerEl = document.createElement('div');
       runnerEl.className = 'runner-emoji';
       runnerEl.style.cssText = 'font-size: 28px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); transition: transform 0.15s ease;';
-      runnerEl.textContent = '🏃';
+      runnerEl.textContent = '🏃‍♂️';
       runnerElementRef.current = runnerEl;
 
       runnerMarkerRef.current = new mapboxgl.Marker({ element: runnerEl, anchor: 'center' })
@@ -207,8 +207,8 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
     const currentFrame = Math.floor(elapsed / frameInterval) % 2;
     if (currentFrame !== emojiFrameRef.current && runnerElementRef.current) {
       emojiFrameRef.current = currentFrame;
-      // Alternate between walking and running for animation effect
-      runnerElementRef.current.textContent = currentFrame === 0 ? '🏃' : '🚶';
+      // Alternate between walking and running for animation effect (same gender for consistency)
+      runnerElementRef.current.textContent = currentFrame === 0 ? '🏃‍♂️' : '🚶‍♂️';
       // Add bounce effect
       runnerElementRef.current.style.transform = currentFrame === 0 ? 'translateY(-3px)' : 'translateY(0)';
     }
