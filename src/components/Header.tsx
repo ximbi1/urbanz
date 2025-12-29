@@ -88,11 +88,11 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
       <div className="container mx-auto px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-[60px] w-[60px] rounded-xl overflow-hidden bg-gradient-to-br from-primary to-accent border-glow">
+            <div className="h-10 w-10 rounded-lg overflow-hidden flex-shrink-0">
               <img 
                 src={logoUrbanz} 
                 alt="Logo URBANZ" 
-                className="h-full w-full object-cover scale-[1.15]"
+                className="h-full w-full object-cover scale-[1.8]"
               />
             </div>
             <h1 className="text-2xl font-display font-bold glow-primary">
