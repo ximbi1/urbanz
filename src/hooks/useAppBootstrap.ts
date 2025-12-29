@@ -96,10 +96,14 @@ export const useAppBootstrap = () => {
       return;
     }
 
+    // Wait for session to be ready
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUser = sessionData?.session?.user;
+
     const queue = getOfflineRuns().filter(shouldAttemptRun);
     
-    // If no pending runs, go straight to prefetch
-    if (queue.length === 0) {
+    // If no pending runs or no user, go straight to prefetch
+    if (queue.length === 0 || !currentUser) {
       await prefetchData();
       setState(prev => ({ ...prev, isBootstrapping: false, phase: 'done' }));
       return;
@@ -108,15 +112,6 @@ export const useAppBootstrap = () => {
     setState(prev => ({ ...prev, phase: 'syncing', totalPending: queue.length }));
 
     try {
-      const { data } = await supabase.auth.getUser();
-      const currentUser = data?.user;
-      
-      if (!currentUser) {
-        await prefetchData();
-        setState(prev => ({ ...prev, isBootstrapping: false, phase: 'done' }));
-        return;
-      }
-
       let syncedCount = 0;
 
       for (const entry of queue) {
