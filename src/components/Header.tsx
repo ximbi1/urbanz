@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react';
 import { calculateLevel, getLevelTitle } from '@/utils/levelSystem';
 import { useNavigate } from 'react-router-dom';
+import logoUrbanz from '@/assets/logo-urbanz.png';
 
 interface HeaderProps {
   onShowNotifications: () => void;
@@ -87,9 +88,11 @@ const Header = ({ onShowNotifications }: HeaderProps) => {
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center border-glow">
-              <span className="text-xl font-display font-bold">U</span>
-            </div>
+            <img 
+              src={logoUrbanz} 
+              alt="URBANZ" 
+              className="w-10 h-10 rounded-lg object-cover"
+            />
             <h1 className="text-2xl font-display font-bold glow-primary">
               URBANZ
             </h1>

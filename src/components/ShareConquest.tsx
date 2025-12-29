@@ -8,6 +8,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { calculateDistance } from '@/utils/geoCalculations';
+import logoUrbanz from '@/assets/logo-urbanz.png';
 
 interface ShareConquestProps {
   run: Run;
@@ -210,11 +211,23 @@ export const ShareConquest = ({ run, onClose }: ShareConquestProps) => {
       ctx.fillStyle = headerGradient;
       ctx.fillRect(0, 0, width, 120);
 
+      // Load and draw logo
+      const logoImg = new Image();
+      await new Promise<void>((resolve) => {
+        logoImg.onload = () => resolve();
+        logoImg.onerror = () => resolve();
+        logoImg.src = logoUrbanz;
+      });
+      
+      if (logoImg.complete && logoImg.naturalWidth > 0) {
+        ctx.drawImage(logoImg, 20, 15, 90, 90);
+      }
+
       // URBANZ title
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText('URBANZ', 40, 78);
+      ctx.fillText('URBANZ', 125, 78);
 
       // Date
       ctx.font = '28px system-ui, -apple-system, sans-serif';
