@@ -1,0 +1,19 @@
+name: Cleanup Old Feed
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Every day at 3 AM UTC
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger cleanup-old-feed
+        env:
+          SUPABASE_FUNCTION_URL: https://mingyhynzeoawsjnnpwj.functions.supabase.co/cleanup-old-feed
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -X POST "$SUPABASE_FUNCTION_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
