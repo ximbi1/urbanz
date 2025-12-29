@@ -14,7 +14,7 @@ import PullToRefreshIndicator from './PullToRefreshIndicator';
 
 // Constantes para rotación de misiones
 const ROTATION_DURATION_MS = 2 * 24 * 60 * 60 * 1000; // 2 días en ms
-const TOTAL_ROTATION_SLOTS = 3; // 3 slots = 6 días de ciclo completo
+const TOTAL_ROTATION_SLOTS = 5; // 5 slots = 10 días de ciclo completo
 const ROTATION_EPOCH = new Date('2025-01-01T00:00:00Z').getTime(); // Fecha base para calcular slots
 
 // Calcula el slot actual basado en el tiempo
@@ -28,6 +28,12 @@ const getTimeUntilNextRotation = () => {
   const elapsed = Date.now() - ROTATION_EPOCH;
   const currentCycleElapsed = elapsed % ROTATION_DURATION_MS;
   return ROTATION_DURATION_MS - currentCycleElapsed;
+};
+
+// Verifica si es fin de semana (sábado o domingo)
+const isWeekend = () => {
+  const day = new Date().getDay();
+  return day === 0 || day === 6;
 };
 
 interface ChallengesProps {
@@ -56,11 +62,12 @@ interface Mission {
   id: string;
   title: string;
   description: string;
-  mission_type: 'park' | 'fountain' | 'district';
+  mission_type: string;
   target_count: number;
   reward_points: number;
   reward_shields: number;
   rotation_slot: number;
+  weekend_only: boolean;
   progress?: number;
   completed?: boolean;
 }
@@ -223,34 +230,53 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
     if (!user) return;
     setMissionsLoading(true);
     
-    // Obtener el slot de rotación actual
+    // Obtener el slot de rotación actual y si es fin de semana
     const currentSlot = getCurrentRotationSlot();
+    const weekend = isWeekend();
 
-    const { data: missionsData, error: missionsError } = await supabase
+    // Cargar misiones regulares del slot actual (no de fin de semana)
+    const { data: regularMissions, error: regularError } = await supabase
       .from('missions')
       .select('*')
       .eq('active', true)
       .eq('rotation_slot', currentSlot)
+      .eq('weekend_only', false)
       .order('mission_type', { ascending: true });
 
-    if (missionsError) {
-      console.error('Error cargando misiones:', missionsError);
+    if (regularError) {
+      console.error('Error cargando misiones:', regularError);
       toast.error('Error cargando misiones');
       setMissionsLoading(false);
       return;
     }
+
+    // Si es fin de semana, también cargar misiones especiales de fin de semana
+    let weekendMissions: any[] = [];
+    if (weekend) {
+      const { data: weekendData } = await supabase
+        .from('missions')
+        .select('*')
+        .eq('active', true)
+        .eq('weekend_only', true)
+        .order('reward_points', { ascending: false });
+      
+      weekendMissions = weekendData || [];
+    }
+
+    const allMissions = [...(regularMissions || []), ...weekendMissions];
 
     const { data: missionsProgress } = await supabase
       .from('mission_progress')
       .select('*')
       .eq('user_id', user.id);
 
-    const combined = (missionsData || []).map((mission) => {
+    const combined = allMissions.map((mission) => {
       const progressRow = missionsProgress?.find((row) => row.mission_id === mission.id);
       return {
         ...mission,
         mission_type: mission.mission_type as Mission['mission_type'],
         rotation_slot: mission.rotation_slot || 0,
+        weekend_only: mission.weekend_only || false,
         progress: progressRow?.progress || 0,
         completed: progressRow?.completed || false,
       } as Mission;
@@ -305,19 +331,31 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
     return labels[type as keyof typeof labels] || type;
   };
 
-  const missionIconMap: Record<Mission['mission_type'], any> = {
+  const missionIconMap: Record<string, any> = {
     park: Trees,
     fountain: Droplets,
     district: Map,
+    runs: Trophy,
+    distance: Target,
+    territories: Map,
+    stolen: Award,
+    pace: Timer,
+    defense: Award,
   };
 
-  const getMissionLabel = (type: Mission['mission_type']) => {
-    const labels = {
+  const getMissionLabel = (type: string) => {
+    const labels: Record<string, string> = {
       park: 'Parques',
       fountain: 'Fuentes',
       district: 'Barrios',
+      runs: 'Carreras',
+      distance: 'Distancia',
+      territories: 'Territorios',
+      stolen: 'Robos',
+      pace: 'Ritmo',
+      defense: 'Defensa',
     };
-    return labels[type];
+    return labels[type] || type;
   };
 
   const loadMapTargets = async () => {
@@ -370,70 +408,131 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
     return `${hours}h ${minutes}m`;
   };
 
-  const renderMissionSection = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Target className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
+  const renderMissionSection = () => {
+    const regularMissions = missions.filter(m => !m.weekend_only);
+    const weekendMissions = missions.filter(m => m.weekend_only);
+    
+    return (
+      <div className="space-y-4">
+        {/* Regular Missions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
+          </div>
+          <Badge variant="outline" className="flex items-center gap-1 text-xs">
+            <Timer className="w-3 h-3" />
+            Rota en {formatCountdown(rotationCountdown)}
+          </Badge>
         </div>
-        <Badge variant="outline" className="flex items-center gap-1 text-xs">
-          <Timer className="w-3 h-3" />
-          Rota en {formatCountdown(rotationCountdown)}
-        </Badge>
+        {missionsLoading ? (
+          <ContentSkeleton type="challenges" count={2} />
+        ) : regularMissions.length === 0 ? (
+          <EmptyState 
+            type="challenges" 
+            className="py-6"
+            title="Sin misiones activas"
+            description="Vuelve pronto para nuevas misiones"
+          />
+        ) : (
+          <div className="space-y-3">
+            {regularMissions.map((mission) => {
+              const Icon = missionIconMap[mission.mission_type] || Target;
+              const progressValue = Math.min(mission.progress || 0, mission.target_count);
+              const percent = Math.min(100, (progressValue / mission.target_count) * 100);
+              return (
+                <Card key={mission.id} className="p-4 bg-card/80 border-border">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs uppercase text-muted-foreground">{getMissionLabel(mission.mission_type)}</p>
+                          <h4 className="text-base font-semibold">{mission.title}</h4>
+                        </div>
+                        {mission.completed && (
+                          <span className="text-xs font-semibold text-emerald-500">Completada</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{mission.description}</p>
+                      <div className="mt-3 space-y-1">
+                        <Progress value={percent} className="h-2" />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Progreso: {progressValue}/{mission.target_count}</span>
+                          <span>
+                            {mission.reward_points ? `+${mission.reward_points} pts` : ''}
+                            {mission.reward_points && mission.reward_shields ? ' · ' : ''}
+                            {mission.reward_shields ? `+${mission.reward_shields} escudo` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Weekend Special Missions */}
+        {weekendMissions.length > 0 && (
+          <div className="space-y-3 mt-6">
+            <div className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-amber-500" />
+              <h3 className="text-lg font-display font-bold">🌟 Misiones de fin de semana</h3>
+              <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30">
+                Especiales
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              ¡Misiones exclusivas con mejores recompensas disponibles solo durante el fin de semana!
+            </p>
+            <div className="space-y-3">
+              {weekendMissions.map((mission) => {
+                const Icon = missionIconMap[mission.mission_type] || Target;
+                const progressValue = Math.min(mission.progress || 0, mission.target_count);
+                const percent = Math.min(100, (progressValue / mission.target_count) * 100);
+                return (
+                  <Card key={mission.id} className="p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-amber-500" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs uppercase text-amber-500">{getMissionLabel(mission.mission_type)}</p>
+                            <h4 className="text-base font-semibold">{mission.title}</h4>
+                          </div>
+                          {mission.completed && (
+                            <span className="text-xs font-semibold text-emerald-500">Completada</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">{mission.description}</p>
+                        <div className="mt-3 space-y-1">
+                          <Progress value={percent} className="h-2 [&>div]:bg-amber-500" />
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Progreso: {progressValue}/{mission.target_count}</span>
+                            <span className="text-amber-500 font-medium">
+                              {mission.reward_points ? `+${mission.reward_points} pts` : ''}
+                              {mission.reward_points && mission.reward_shields ? ' · ' : ''}
+                              {mission.reward_shields ? `+${mission.reward_shields} escudo` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-      {missionsLoading ? (
-        <ContentSkeleton type="challenges" count={2} />
-      ) : missions.length === 0 ? (
-        <EmptyState 
-          type="challenges" 
-          className="py-6"
-          title="Sin misiones activas"
-          description="Vuelve pronto para nuevas misiones"
-        />
-      ) : (
-        <div className="space-y-3">
-          {missions.map((mission) => {
-            const Icon = missionIconMap[mission.mission_type];
-            const progressValue = Math.min(mission.progress || 0, mission.target_count);
-            const percent = Math.min(100, (progressValue / mission.target_count) * 100);
-            return (
-              <Card key={mission.id} className="p-4 bg-card/80 border-border">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">{getMissionLabel(mission.mission_type)}</p>
-                        <h4 className="text-base font-semibold">{mission.title}</h4>
-                      </div>
-                      {mission.completed && (
-                        <span className="text-xs font-semibold text-emerald-500">Completada</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">{mission.description}</p>
-                    <div className="mt-3 space-y-1">
-                      <Progress value={percent} className="h-2" />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Progreso: {progressValue}/{mission.target_count}</span>
-                        <span>
-                          {mission.reward_points ? `+${mission.reward_points} pts` : ''}
-                          {mission.reward_points && mission.reward_shields ? ' · ' : ''}
-                          {mission.reward_shields ? `+${mission.reward_shields} escudo` : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   const renderMapTargetsSection = () => (
     <div className="space-y-3">

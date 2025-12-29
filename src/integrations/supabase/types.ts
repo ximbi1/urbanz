@@ -683,6 +683,7 @@ export type Database = {
           start_date: string
           target_count: number
           title: string
+          weekend_only: boolean | null
         }
         Insert: {
           active?: boolean
@@ -697,6 +698,7 @@ export type Database = {
           start_date?: string
           target_count?: number
           title: string
+          weekend_only?: boolean | null
         }
         Update: {
           active?: boolean
@@ -711,6 +713,7 @@ export type Database = {
           start_date?: string
           target_count?: number
           title?: string
+          weekend_only?: boolean | null
         }
         Relationships: []
       }
