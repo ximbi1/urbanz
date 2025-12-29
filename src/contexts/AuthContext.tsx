@@ -70,13 +70,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    // Detectar si estamos en PWA standalone para usar skipBrowserRedirect
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/`,
+        skipBrowserRedirect: isStandalone,
       },
     });
+    
     if (error) throw error;
+    
+    // Si estamos en PWA, abrir en la misma ventana para que vuelva correctamente
+    if (isStandalone && data?.url) {
+      window.location.href = data.url;
+    }
   };
 
   return (
