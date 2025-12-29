@@ -457,6 +457,11 @@ const MapView = ({
       return;
     }
 
+    // Mundos Separados: Liga Social ve solo territorios sociales, 
+    // usuarios normales ven solo su league_shard (sin territorios sociales)
+    const isSocialMode = playerSettings.socialLeague;
+    const shardFilter = isSocialMode ? 'social' : playerSettings.leagueShard;
+
     const { data, error } = await supabase
       .from('territories')
       .select(`
@@ -464,7 +469,7 @@ const MapView = ({
         profiles:user_id (username, color),
         shields:territory_shields(expires_at)
       `)
-      .eq('league_shard', playerSettings.leagueShard)
+      .eq('league_shard', shardFilter)
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -557,7 +562,10 @@ const MapView = ({
 
     loadTerritories();
 
-    const filter = playerSettings?.leagueShard ? `league_shard=eq.${playerSettings.leagueShard}` : undefined;
+    // Mundos Separados: filtrar por 'social' o league_shard según el modo
+    const isSocialMode = playerSettings?.socialLeague;
+    const shardFilter = isSocialMode ? 'social' : playerSettings?.leagueShard;
+    const filter = shardFilter ? `league_shard=eq.${shardFilter}` : undefined;
 
     const channel = supabase
       .channel('territories-changes')
