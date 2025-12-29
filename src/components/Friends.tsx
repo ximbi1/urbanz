@@ -147,13 +147,26 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
     if (!user) return;
     setDuelsLoading(true);
     try {
+      // Solo cargar duelos activos/pendientes, o completados en las últimas 24h
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
       const { data, error } = await supabase
         .from('duels')
         .select('*')
         .or(`challenger_id.eq.${user.id},opponent_id.eq.${user.id}`)
+        .or(`status.neq.completed,created_at.gt.${oneDayAgo}`)
         .order('created_at', { ascending: false });
+      
       if (error) throw error;
-      setDuels((data || []) as Duel[]);
+      
+      // Filtrar en cliente: mostrar activos/pendientes, o completados hace menos de 24h
+      const filteredDuels = (data || []).filter((duel) => {
+        if (duel.status !== 'completed') return true;
+        const completedRecently = new Date(duel.end_at).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+        return completedRecently;
+      });
+      
+      setDuels(filteredDuels as Duel[]);
     } catch (error) {
       console.error('Error cargando duelos:', error);
       toast.error('No se pudieron cargar los duelos');
