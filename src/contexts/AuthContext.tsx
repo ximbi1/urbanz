@@ -70,24 +70,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signInWithGoogle = async () => {
-    // Detectar si estamos en PWA standalone para usar skipBrowserRedirect
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true;
-
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    // En PWA/standalone en iOS, OAuth siempre abre en Safari
+    // La única solución es usar la misma URL y confiar en que el usuario
+    // tiene la PWA instalada para que vuelva automáticamente
+    const redirectUrl = window.location.origin + '/';
+    
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
-        skipBrowserRedirect: isStandalone,
+        redirectTo: redirectUrl,
+        // No usar skipBrowserRedirect - dejamos que Supabase maneje el flujo
       },
     });
     
     if (error) throw error;
-    
-    // Si estamos en PWA, abrir en la misma ventana para que vuelva correctamente
-    if (isStandalone && data?.url) {
-      window.location.href = data.url;
-    }
   };
 
   return (
