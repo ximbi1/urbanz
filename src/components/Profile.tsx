@@ -1162,6 +1162,29 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
           </Card>
         )}
 
+        {/* Puntos separados: Competitivo vs Social */}
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/30 text-center">
+            <div className="flex justify-center mb-2">
+              <Trophy className="w-6 h-6 text-primary" />
+            </div>
+            <div className="text-2xl font-display font-bold text-primary">
+              {profile?.season_points || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">Pts Competitivo</div>
+          </Card>
+          
+          <Card className="p-4 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/30 text-center">
+            <div className="flex justify-center mb-2">
+              <Trophy className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div className="text-2xl font-display font-bold text-emerald-500">
+              {profile?.social_points || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">Pts Social</div>
+          </Card>
+        </div>
+
         <Card className="p-4 bg-muted/30 border-border">
           <div className="grid grid-cols-2 gap-3">
             <div>
