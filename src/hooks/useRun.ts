@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { KeepAwake } from '@capacitor-community/keep-awake';
@@ -27,6 +27,7 @@ import { usePlayerSettings } from '@/hooks/usePlayerSettings';
 import { startRunTrackingService, stopRunTrackingService } from '@/lib/runTracking';
 import { updateActiveDuels } from './run/runGamification';
 import { extractLoops } from './run/runLoops';
+import { useAdaptiveGPS } from './useAdaptiveGPS';
 
 export const useRun = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -43,6 +44,11 @@ export const useRun = () => {
   const { user } = useAuth();
   const { checkAndUnlockAchievements } = useAchievements();
   const { settings: playerSettings } = usePlayerSettings();
+  const adaptiveGPS = useAdaptiveGPS({
+    minDistanceMeters: 5,
+    minTimeMs: 2000,
+    maxAccuracyMeters: 25,
+  });
   const isNative = Capacitor.isNativePlatform();
   const platform = Capacitor.getPlatform();
   const isAndroid = platform === 'android';
@@ -92,28 +98,23 @@ export const useRun = () => {
 
   const handleGPSPosition = useCallback((position: GeolocationPosition) => {
     const accuracy = position.coords.accuracy;
-    if (accuracy && accuracy > 20) {
-      console.warn(`GPS accuracy too low: ${accuracy}m`);
-      return;
-    }
-
-    const newPoint: GPSPoint = {
+    const newPoint: Coordinate = {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
-      accuracy: accuracy ?? undefined,
-      timestamp: Date.now(),
     };
 
-    setRunPath(prev => {
-      if (prev.length > 0) {
-        const lastPoint = prev[prev.length - 1];
-        const dist = calculatePathDistance([lastPoint, newPoint]);
-        if (dist < 5) return prev;
-      }
+    // Usar GPS adaptativo para filtrar puntos y ahorrar batería
+    const result = adaptiveGPS.recordPoint(newPoint, accuracy ?? undefined, Date.now());
+    
+    if (!result.recorded) {
+      return; // Punto filtrado por GPS adaptativo
+    }
 
+    setRunPath(prev => {
       const updated = [...prev, newPoint];
-      if (prev.length > 0) {
-        setDistance(d => d + calculatePathDistance([prev[prev.length - 1], newPoint]));
+      
+      if (result.distance > 0) {
+        setDistance(d => d + result.distance);
       }
 
       if (updated.length >= 4 && isPolygonClosed(updated)) {
@@ -124,7 +125,7 @@ export const useRun = () => {
 
       return updated;
     });
-  }, []);
+  }, [adaptiveGPS]);
 
   const clearGPSWatch = useCallback(async () => {
     if (watchId === null) return;
@@ -173,6 +174,7 @@ export const useRun = () => {
     setPausedTime(0);
     setLastPauseTime(null);
     setUseGPS(gpsMode);
+    adaptiveGPS.reset(); // Reset GPS adaptativo
     enableKeepAwake();
     triggerHaptic('start');
     startForegroundService();
@@ -232,7 +234,7 @@ export const useRun = () => {
     }
 
     toast.success('¡Carrera iniciada!');
-  }, [enableKeepAwake, handleGPSPosition, isNative, startForegroundService, triggerHaptic]);
+  }, [adaptiveGPS, enableKeepAwake, handleGPSPosition, isNative, startForegroundService, triggerHaptic]);
 
   const pauseRun = useCallback(() => {
     setIsPaused(true);
