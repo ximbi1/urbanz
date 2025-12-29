@@ -449,7 +449,7 @@ const Index = () => {
 
       <BottomNav activeSection={activeSection} onNavigate={handleNavigate} />
 
-      {activeSection === 'home' && !showSummary && (
+      {activeSection === 'home' && !showSummary && !showNotifications && (
         <RunControls
           isRunning={isRunning || isSaving}
           isPaused={isPaused}
