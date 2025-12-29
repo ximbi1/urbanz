@@ -73,12 +73,12 @@ export const calculateLevel = (totalPoints: number): LevelInfo => {
 // Obtener el título/rango según el nivel
 export const getLevelTitle = (level: number): string => {
   if (level >= 20) return '🏆 Leyenda';
-  if (level >= 17) return '💎 Titán';
-  if (level >= 14) return '⭐ Conquistador';
-  if (level >= 11) return '🥇 Dominador';
-  if (level >= 8) return '🥈 Guerrero';
+  if (level >= 17) return '💎 Élite';
+  if (level >= 14) return '⭐ Veterano';
+  if (level >= 11) return '🥇 Experto';
+  if (level >= 8) return '🥈 Atleta';
   if (level >= 5) return '🥉 Explorador';
-  return '🌱 Corredor';
+  return '🌱 Novato';
 };
 
 // Obtener color según el nivel
