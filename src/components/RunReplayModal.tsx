@@ -61,11 +61,12 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/outdoors-v12',
-      pitch: 45,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      pitch: 60,
       bearing: -20,
+      antialias: true,
     });
-    map.fitBounds(bounds, { padding: 50 });
+    map.fitBounds(bounds, { padding: 50, pitch: 60, bearing: -20 });
     mapRef.current = map;
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-left');
@@ -73,13 +74,56 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
     map.on('load', () => {
       if (!mapRef.current) return;
 
+      // Add 3D buildings layer
+      const layers = mapRef.current.getStyle().layers;
+      const labelLayerId = layers?.find(
+        (layer) => layer.type === 'symbol' && layer.layout?.['text-field']
+      )?.id;
+
+      mapRef.current.addLayer(
+        {
+          id: '3d-buildings',
+          source: 'composite',
+          'source-layer': 'building',
+          filter: ['==', 'extrude', 'true'],
+          type: 'fill-extrusion',
+          minzoom: 14,
+          paint: {
+            'fill-extrusion-color': [
+              'interpolate',
+              ['linear'],
+              ['get', 'height'],
+              0, '#e0e0e0',
+              50, '#c0c0c0',
+              100, '#a0a0a0',
+              200, '#808080'
+            ],
+            'fill-extrusion-height': ['get', 'height'],
+            'fill-extrusion-base': ['get', 'min_height'],
+            'fill-extrusion-opacity': 0.85,
+          },
+        },
+        labelLayerId
+      );
+
+      // Add terrain for 3D effect
       mapRef.current.addSource('mapbox-dem', {
         type: 'raster-dem',
         url: 'mapbox://mapbox.terrain-rgb'
       });
 
       mapRef.current.setTerrain({ source: 'mapbox-dem', exaggeration: 1.2 });
-      mapRef.current.setPitch(50);
+
+      // Add sky layer for better 3D atmosphere
+      mapRef.current.addLayer({
+        id: 'sky',
+        type: 'sky',
+        paint: {
+          'sky-type': 'atmosphere',
+          'sky-atmosphere-sun': [0.0, 90.0],
+          'sky-atmosphere-sun-intensity': 15,
+        },
+      });
 
       mapRef.current.addSource('replay-route', {
         type: 'geojson',
@@ -99,8 +143,8 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
         source: 'replay-route',
         paint: {
           'line-color': '#f97316',
-          'line-width': 5,
-          'line-opacity': 0.9,
+          'line-width': 6,
+          'line-opacity': 0.95,
         },
       });
 
@@ -112,6 +156,12 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
       runnerMarkerRef.current = new mapboxgl.Marker({ color: '#f97316' })
         .setLngLat(coordsRef.current[0])
         .addTo(mapRef.current);
+
+      // Set initial zoom for better building visibility
+      const currentZoom = mapRef.current.getZoom();
+      if (currentZoom < 14) {
+        mapRef.current.setZoom(14.5);
+      }
 
       startAnimation();
     });
@@ -144,10 +194,20 @@ export const RunReplayModal = ({ path, onClose, title }: RunReplayModalProps) =>
     runnerMarkerRef.current?.setLngLat(coordsRef.current[targetIndex]);
 
     if (mapRef.current && coordsRef.current[targetIndex]) {
+      const nextIdx = Math.min(targetIndex + 1, coordsRef.current.length - 1);
+      const currentCoord = coordsRef.current[targetIndex];
+      const nextCoord = coordsRef.current[nextIdx];
+      
+      // Calculate bearing based on direction of travel
+      const bearing = targetIndex < coordsRef.current.length - 1
+        ? Math.atan2(nextCoord[0] - currentCoord[0], nextCoord[1] - currentCoord[1]) * (180 / Math.PI)
+        : mapRef.current.getBearing();
+
       mapRef.current.easeTo({
         center: coordsRef.current[targetIndex],
-        bearing: -20 + (t * 40),
-        pitch: 45 + (t * 10),
+        bearing: bearing,
+        pitch: 60,
+        zoom: 15.5,
         duration: 400,
         easing: (n) => n,
       });
