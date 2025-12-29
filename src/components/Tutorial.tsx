@@ -47,6 +47,20 @@ const tutorialSteps = [
     highlight: 'Accede a las ligas desde el icono del trofeo',
   },
   {
+    title: 'Liga Social',
+    description: 'Activa el modo Liga Social desde tu perfil para correr en grupo. Los territorios conquistados se comparten con tus compañeros de liga.',
+    icon: Users,
+    image: '👥',
+    highlight: 'Perfil → Liga Social (switch)',
+  },
+  {
+    title: 'Misiones rotativas',
+    description: 'Cada 2 días cambian las misiones disponibles (ciclo de 10 días). Los fines de semana aparecen misiones especiales con +50% de recompensas y escudos extra.',
+    icon: Target,
+    image: '🎯',
+    highlight: 'Revisa Retos para ver las misiones activas',
+  },
+  {
     title: 'Escudos y centro de defensa',
     description: 'Compra escudos y aplícalos a tus territorios desde tu perfil. En el mapa verás un halo dorado en las zonas protegidas.',
     icon: Target,
@@ -55,7 +69,7 @@ const tutorialSteps = [
   },
   {
     title: 'Duelos 1v1',
-    description: 'Reta a tus amigos desde la sección “Amigos”. El progreso de distancia, puntos o territorios se actualiza automáticamente.',
+    description: 'Reta a tus amigos desde la sección "Amigos". El progreso de distancia, puntos o territorios se actualiza automáticamente.',
     icon: Users,
     image: '⚔️',
     highlight: 'Pestaña Amigos → Duelos activos',
@@ -69,7 +83,7 @@ const tutorialSteps = [
   },
   {
     title: 'Importa y revive tus runs',
-    description: 'Sube archivos GPX/TCX desde el perfil y actívalos en 3D con el “Run Replay”. Perfecto para revivir conquistas o analizar rutas.',
+    description: 'Sube archivos GPX/TCX desde el perfil y actívalos en 3D con el "Run Replay". Perfecto para revivir conquistas o analizar rutas.',
     icon: MapPin,
     image: '🎬',
     highlight: 'Perfil → Importar carrera',
