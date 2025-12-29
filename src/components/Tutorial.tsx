@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Trophy, MapPin, Zap, Target, Users, HelpC
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import TerritoryDiagram from './TerritoryDiagram';
 
 interface TutorialProps {
   onClose: () => void;
@@ -25,10 +26,11 @@ const tutorialSteps = [
   },
   {
     title: 'Conquista y superpón',
-    description: 'Si corres por dentro de un territorio ajeno (sin escudo), solo te quedas con la porción que recorriste, el resto sigue siendo suyo. Pero si rodeas completamente un territorio más pequeño con uno más grande, ¡te lo quedas entero!',
+    description: 'Si corres por dentro de un territorio ajeno (sin escudo), solo te quedas con la porción que recorriste. Pero si rodeas completamente un territorio más pequeño, ¡te lo quedas entero!',
     icon: Zap,
     image: '🔥',
     highlight: 'Superponer > robar parcial. Ritmo rápido = bonificación',
+    hasDiagram: true,
   },
   {
     title: 'Gana puntos y sube de nivel',
@@ -149,22 +151,31 @@ const Tutorial = ({ onClose, autoShow = false }: TutorialProps) => {
         <Progress value={progress} className="h-2" />
 
         {/* Content */}
-        <div className="space-y-6 text-center py-6">
-          <div className="text-7xl mb-4 animate-scale-in" style={{ animationDelay: '0.1s' }}>
-            {step.image}
-          </div>
+        <div className="space-y-4 text-center py-4">
+          {!step.hasDiagram && (
+            <div className="text-7xl mb-4 animate-scale-in" style={{ animationDelay: '0.1s' }}>
+              {step.image}
+            </div>
+          )}
           
-          <div className="space-y-3">
-            <h3 className="text-3xl font-display font-bold glow-primary animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="space-y-2">
+            <h3 className="text-2xl md:text-3xl font-display font-bold glow-primary animate-fade-in" style={{ animationDelay: '0.2s' }}>
               {step.title}
             </h3>
-            <p className="text-lg text-muted-foreground max-w-xl mx-auto animate-fade-in" style={{ animationDelay: '0.3s' }}>
+            <p className="text-base text-muted-foreground max-w-xl mx-auto animate-fade-in" style={{ animationDelay: '0.3s' }}>
               {step.description}
             </p>
           </div>
 
+          {/* Territory Diagram for conquest step */}
+          {step.hasDiagram && (
+            <div className="animate-fade-in mt-2" style={{ animationDelay: '0.35s' }}>
+              <TerritoryDiagram />
+            </div>
+          )}
+
           {step.highlight && (
-            <div className="inline-block mt-4 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg animate-fade-in" style={{ animationDelay: '0.4s' }}>
+            <div className="inline-block mt-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg animate-fade-in" style={{ animationDelay: '0.4s' }}>
               <p className="text-sm font-semibold text-primary flex items-center gap-2">
                 <HelpCircle className="w-4 h-4" />
                 {step.highlight}
