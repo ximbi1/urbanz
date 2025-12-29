@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, CheckCircle2, Clock, Award, Trees, Droplets, Map } from 'lucide-react';
+import { X, Trophy, Target, CheckCircle2, Clock, Award, Trees, Droplets, Map, Timer } from 'lucide-react';
 import { ContentSkeleton } from './ui/content-skeleton';
 import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './PullToRefreshIndicator';
+
+// Constantes para rotación de misiones
+const ROTATION_DURATION_MS = 2 * 24 * 60 * 60 * 1000; // 2 días en ms
+const TOTAL_ROTATION_SLOTS = 3; // 3 slots = 6 días de ciclo completo
+const ROTATION_EPOCH = new Date('2025-01-01T00:00:00Z').getTime(); // Fecha base para calcular slots
+
+// Calcula el slot actual basado en el tiempo
+const getCurrentRotationSlot = () => {
+  const elapsed = Date.now() - ROTATION_EPOCH;
+  return Math.floor(elapsed / ROTATION_DURATION_MS) % TOTAL_ROTATION_SLOTS;
+};
+
+// Calcula el tiempo restante hasta la próxima rotación
+const getTimeUntilNextRotation = () => {
+  const elapsed = Date.now() - ROTATION_EPOCH;
+  const currentCycleElapsed = elapsed % ROTATION_DURATION_MS;
+  return ROTATION_DURATION_MS - currentCycleElapsed;
+};
 
 interface ChallengesProps {
   onClose: () => void;
@@ -42,8 +60,7 @@ interface Mission {
   target_count: number;
   reward_points: number;
   reward_shields: number;
-  start_date: string;
-  end_date: string;
+  rotation_slot: number;
   progress?: number;
   completed?: boolean;
 }
@@ -69,6 +86,15 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
   const [missionsLoading, setMissionsLoading] = useState(true);
   const [mapTargets, setMapTargets] = useState<MapTarget[]>([]);
   const [mapTargetsLoading, setMapTargetsLoading] = useState(true);
+  const [rotationCountdown, setRotationCountdown] = useState(getTimeUntilNextRotation());
+
+  // Actualizar countdown cada minuto
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotationCountdown(getTimeUntilNextRotation());
+    }, 60000); // cada minuto
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -196,15 +222,16 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
   const loadMissions = async () => {
     if (!user) return;
     setMissionsLoading(true);
-    const now = new Date().toISOString();
+    
+    // Obtener el slot de rotación actual
+    const currentSlot = getCurrentRotationSlot();
 
     const { data: missionsData, error: missionsError } = await supabase
       .from('missions')
       .select('*')
       .eq('active', true)
-      .lte('start_date', now)
-      .gte('end_date', now)
-      .order('start_date', { ascending: true });
+      .eq('rotation_slot', currentSlot)
+      .order('mission_type', { ascending: true });
 
     if (missionsError) {
       console.error('Error cargando misiones:', missionsError);
@@ -223,6 +250,7 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
       return {
         ...mission,
         mission_type: mission.mission_type as Mission['mission_type'],
+        rotation_slot: mission.rotation_slot || 0,
         progress: progressRow?.progress || 0,
         completed: progressRow?.completed || false,
       } as Mission;
@@ -330,11 +358,29 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
     }
   };
 
+  // Formatear el countdown
+  const formatCountdown = (ms: number) => {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = hours % 24;
+      return `${days}d ${remainingHours}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  };
+
   const renderMissionSection = () => (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Target className="w-5 h-5 text-primary" />
-      <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Target className="w-5 h-5 text-primary" />
+          <h3 className="text-lg font-display font-bold">Misiones dinámicas</h3>
+        </div>
+        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+          <Timer className="w-3 h-3" />
+          Rota en {formatCountdown(rotationCountdown)}
+        </Badge>
       </div>
       {missionsLoading ? (
         <ContentSkeleton type="challenges" count={2} />
@@ -349,8 +395,8 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
         <div className="space-y-3">
           {missions.map((mission) => {
             const Icon = missionIconMap[mission.mission_type];
-            const progress = Math.min(mission.progress || 0, mission.target_count);
-            const percent = Math.min(100, (progress / mission.target_count) * 100);
+            const progressValue = Math.min(mission.progress || 0, mission.target_count);
+            const percent = Math.min(100, (progressValue / mission.target_count) * 100);
             return (
               <Card key={mission.id} className="p-4 bg-card/80 border-border">
                 <div className="flex items-start gap-3">
@@ -371,7 +417,7 @@ const Challenges = ({ onClose, isMobileFullPage = false }: ChallengesProps) => {
                     <div className="mt-3 space-y-1">
                       <Progress value={percent} className="h-2" />
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Progreso: {progress}/{mission.target_count}</span>
+                        <span>Progreso: {progressValue}/{mission.target_count}</span>
                         <span>
                           {mission.reward_points ? `+${mission.reward_points} pts` : ''}
                           {mission.reward_points && mission.reward_shields ? ' · ' : ''}
