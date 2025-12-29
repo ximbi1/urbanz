@@ -38,7 +38,8 @@ URBANZ fusiona tres elementos:
 ### 🎮 Progresión y Gamificación
 - **Sistema de niveles**: Gana XP por distancia, territorios y actividad
 - **Logros desbloqueables**: Por distancia, territorios y rachas
-- **Desafíos semanales**: Objetivos rotativos con recompensas
+- **Misiones rotativas**: Ciclo de 10 días con 3 misiones activas; cada 2 días rotan
+- **Misiones de fin de semana**: Retos especiales sábado/domingo con mejores recompensas (+50% puntos, +escudos)
 - **Puntos y ligas**: Sistema competitivo global y entre amigos
 
 ### 👥 Social
@@ -46,6 +47,7 @@ URBANZ fusiona tres elementos:
 - **Ligas competitivas**:
   - Global: Top runners del mundo
   - Amigos: Compite solo con tu círculo
+- **Liga Social**: Modo alternativo donde corres en grupo y los territorios se comparten; actívalo desde tu perfil
 - **Feed de actividad**: Ve las carreras y conquistas recientes
 - **Notificaciones**: Alertas de logros, desafíos y actividad social
 - **Duelos 1v1**: Lanza retos personalizados a tus amigos y desbloquea recompensas extra
@@ -455,14 +457,17 @@ Todas las tablas tienen RLS habilitado:
 - [x] Importación de archivos GPX/TCX y replay 3D de carreras
 - [x] Modo offline + sincronización diferida de carreras (con banner en home)
 - [x] Misiones dinámicas basadas en parques, fuentes y barrios de OSM
+- [x] **Liga Social**: Modo cooperativo donde los territorios se comparten con el grupo
+- [x] **Misiones rotativas**: Ciclo de 10 días con 3 misiones; cambian cada 2 días
+- [x] **Misiones de fin de semana**: Retos especiales sábado/domingo con +50% recompensas y escudos
 
 ### En desarrollo
 - [ ] Heatmap de zonas más disputadas y hotspots de robos
 - [ ] Rankings especializados (ritmo, distancia, constancia, defensores)
-- [ ] Sistema de misiones dinámicas (POI diarios/semanales)
+- [ ] Notificaciones de nuevas misiones disponibles
 
 ### Planificado
-- [ ] Clanes/escuadras y territorios compartidos
+- [ ] Clanes/escuadras y territorios compartidos permanentes
 - [ ] Eventos especiales y territorios premium patrocinados
 - [ ] Notificaciones push nativas y campañas in-app
 - [ ] Integración con wearables (Garmin, Strava, Apple Watch) y auto-sync
