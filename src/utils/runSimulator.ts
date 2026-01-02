@@ -30,14 +30,11 @@ export const generateSimulatedRun = (
 ): SimulatedRun => {
   const {
     minDistance = 800,
-    maxDistance = 2500,
-    minPoints = 8,
-    maxPoints = 16,
+    maxDistance = 2000,
+    minPoints = 12,
+    maxPoints = 24,
   } = options || {};
 
-  // Random number of points
-  const numPoints = Math.floor(Math.random() * (maxPoints - minPoints + 1)) + minPoints;
-  
   // Target distance
   const targetDistance = Math.random() * (maxDistance - minDistance) + minDistance;
   
@@ -49,28 +46,60 @@ export const generateSimulatedRun = (
   const radiusLat = approxRadius / 111320;
   const radiusLng = approxRadius / (111320 * Math.cos(centerLat * Math.PI / 180));
   
-  // Generate points in a rough circle with some randomness
-  const path: Coordinate[] = [];
+  // Calculate how many points we need so that distance between points is < 80m
+  // Perimeter / numPoints should be < 80m
+  const minPointsForValidation = Math.ceil(targetDistance / 70); // ~70m between points max
+  const numPoints = Math.max(minPointsForValidation, Math.floor(Math.random() * (maxPoints - minPoints + 1)) + minPoints);
+  
+  // Generate base polygon points
+  const basePoints: Coordinate[] = [];
   
   for (let i = 0; i < numPoints; i++) {
     const angle = (2 * Math.PI * i) / numPoints;
     
-    // Add randomness to radius (±30%)
-    const radiusVariation = 0.7 + Math.random() * 0.6;
+    // Add randomness to radius (±20% - less variation for smoother path)
+    const radiusVariation = 0.85 + Math.random() * 0.3;
     const currentRadiusLat = radiusLat * radiusVariation;
     const currentRadiusLng = radiusLng * radiusVariation;
     
-    // Add slight angle offset for more natural shape
-    const angleOffset = (Math.random() - 0.5) * 0.3;
+    const lat = centerLat + currentRadiusLat * Math.sin(angle);
+    const lng = centerLng + currentRadiusLng * Math.cos(angle);
     
-    const lat = centerLat + currentRadiusLat * Math.sin(angle + angleOffset);
-    const lng = centerLng + currentRadiusLng * Math.cos(angle + angleOffset);
-    
-    path.push({ lat, lng });
+    basePoints.push({ lat, lng });
   }
   
   // Close the polygon by adding first point at the end
-  path.push({ ...path[0] });
+  basePoints.push({ ...basePoints[0] });
+  
+  // Now interpolate to ensure no jump > 80m
+  const path: Coordinate[] = [];
+  const MAX_SEGMENT_DISTANCE = 70; // meters
+  
+  for (let i = 0; i < basePoints.length - 1; i++) {
+    const p1 = basePoints[i];
+    const p2 = basePoints[i + 1];
+    
+    path.push(p1);
+    
+    // Calculate distance between points
+    const segmentDist = calculatePathDistance([p1, p2]);
+    
+    if (segmentDist > MAX_SEGMENT_DISTANCE) {
+      // Need to add intermediate points
+      const numIntermediatePoints = Math.ceil(segmentDist / MAX_SEGMENT_DISTANCE);
+      
+      for (let j = 1; j < numIntermediatePoints; j++) {
+        const ratio = j / numIntermediatePoints;
+        path.push({
+          lat: p1.lat + (p2.lat - p1.lat) * ratio,
+          lng: p1.lng + (p2.lng - p1.lng) * ratio,
+        });
+      }
+    }
+  }
+  
+  // Add final point (closing)
+  path.push({ ...basePoints[0] });
   
   // Calculate actual metrics
   const distance = calculatePathDistance(path);
