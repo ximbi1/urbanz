@@ -1,4 +1,4 @@
-import { Play, Pause, Square, Navigation } from 'lucide-react';
+import { Play, Pause, Square, Navigation, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { isDevUser } from '@/utils/runSimulator';
 
 interface RunControlsProps {
   isRunning: boolean;
@@ -19,10 +20,13 @@ interface RunControlsProps {
   duration: number;
   distance: number;
   useGPS: boolean;
+  userId?: string;
+  currentLocation?: { lat: number; lng: number } | null;
   onStart: (gpsMode: boolean) => void;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
+  onSimulate?: (centerLat?: number, centerLng?: number) => void;
 }
 
 const RunControls = ({
@@ -31,11 +35,15 @@ const RunControls = ({
   duration,
   distance,
   useGPS,
+  userId,
+  currentLocation,
   onStart,
   onPause,
   onResume,
   onStop,
+  onSimulate,
 }: RunControlsProps) => {
+  const showDevButton = isDevUser(userId) && onSimulate;
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -55,6 +63,16 @@ const RunControls = ({
       <div className="flex items-center justify-center gap-2 md:gap-4 flex-wrap md:flex-nowrap">
         {!isRunning ? (
           <>
+            {showDevButton && (
+              <Button
+                onClick={() => onSimulate(currentLocation?.lat, currentLocation?.lng)}
+                variant="outline"
+                className="border-dashed border-warning text-warning hover:bg-warning/10 h-12 md:h-10 px-4 text-base md:text-sm"
+              >
+                <FlaskConical className="w-5 h-5 md:w-4 md:h-4 mr-2" />
+                🧪 Simular
+              </Button>
+            )}
             <Button
               onClick={() => onStart(false)}
               className="hidden bg-primary hover:bg-primary/90 h-12 md:h-10 px-6 md:px-4 text-base md:text-sm flex-1 md:flex-none"

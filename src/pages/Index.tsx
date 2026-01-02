@@ -154,6 +154,7 @@ const Index = () => {
     resumeRun,
     addPoint,
     stopRun,
+    simulateRun,
   } = useRun();
 
   const {
@@ -456,10 +457,13 @@ const Index = () => {
           duration={duration}
           distance={distance}
           useGPS={useGPS}
+          userId={user?.id}
+          currentLocation={currentLocation}
           onStart={startRun}
           onPause={pauseRun}
           onResume={resumeRun}
           onStop={handleStopRun}
+          onSimulate={simulateRun}
         />
       )}
 

@@ -28,6 +28,7 @@ import { startRunTrackingService, stopRunTrackingService } from '@/lib/runTracki
 import { updateActiveDuels } from './run/runGamification';
 import { extractLoops } from './run/runLoops';
 import { useAdaptiveGPS } from './useAdaptiveGPS';
+import { generateSimulatedRun } from '@/utils/runSimulator';
 
 export const useRun = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -600,6 +601,23 @@ export const useRun = () => {
     };
   }, [allowSleep, checkAndUnlockAchievements, clearGPSWatch, duration, playerSettings, runPath, stopForegroundService, triggerHaptic, updateActiveDuels, user, useGPS]);
 
+  const simulateRun = useCallback((centerLat?: number, centerLng?: number) => {
+    const simulated = generateSimulatedRun(centerLat, centerLng);
+    
+    setRunPath(simulated.path);
+    setDistance(simulated.distance);
+    setSuration(simulated.duration);
+    setIsRunning(true);
+    setIsPaused(false);
+    setUseGPS(false);
+    setStartTime(Date.now() - simulated.duration * 1000);
+    setPausedTime(0);
+    
+    toast.success('🧪 Carrera simulada generada', {
+      description: `${(simulated.distance / 1000).toFixed(2)} km en ${Math.floor(simulated.duration / 60)} min`,
+    });
+  }, []);
+
   return {
     isRunning,
     isPaused,
@@ -613,5 +631,6 @@ export const useRun = () => {
     resumeRun,
     addPoint,
     stopRun,
+    simulateRun,
   };
 };
