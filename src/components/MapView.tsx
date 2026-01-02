@@ -97,6 +97,17 @@ const MapView = ({
   const setShowParks = onToggleParks ?? setLocalShowParks;
   const setShowFountains = onToggleFountains ?? setLocalShowFountains;
   const setShowDistricts = onToggleDistricts ?? setLocalShowDistricts;
+
+  const formatDuration = (milliseconds: number) => {
+    const totalMinutes = Math.floor(milliseconds / (60 * 1000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m restantes`;
+    }
+    return `${minutes}m restantes`;
+  };
+
   const selectedDistrict = useMemo(() => {
     if (!selectedDistrictId) return null;
     return districtFeatures.find((feature) => feature.properties?.id === selectedDistrictId) || null;
@@ -1411,15 +1422,6 @@ const MapView = ({
     }
   }, [selectedParkId, showParks, parkFeatures, mapReady]);
 
-  const formatDuration = (milliseconds: number) => {
-    const totalMinutes = Math.floor(milliseconds / (60 * 1000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours > 0) {
-      return `${hours}h ${minutes}m restantes`;
-    }
-    return `${minutes}m restantes`;
-  };
 
   const formatDistance = (meters: number) => {
     if (!meters) return '0 km';
