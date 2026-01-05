@@ -61,7 +61,10 @@ const MapView = ({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const userAccuracyRef = useRef<any>(null);
-  const [territoryFilter, setTerritoryFilter] = useState<'all' | 'mine' | 'friends'>('all');
+  const [territoryFilter, setTerritoryFilter] = useState<'all' | 'mine' | 'friends' | 'lobby'>('all');
+  const [lobbies, setLobbies] = useState<{ id: string; name: string }[]>([]);
+  const [selectedLobbyId, setSelectedLobbyId] = useState<string | null>(null);
+  const [lobbyMemberIds, setLobbyMemberIds] = useState<Set<string>>(new Set());
   const [mapChallenges, setMapChallenges] = useState<MapChallenge[]>([]);
   const challengeMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapPois, setMapPois] = useState<MapPoi[]>([]);
@@ -134,6 +137,7 @@ const MapView = ({
     const filteredTerritories = territories.filter((territory: Territory, index: number) => {
       if (territoryFilter === 'mine' && territory.userId !== user?.id) return false;
       if (territoryFilter === 'friends' && (!territory.userId || !friendIds.has(territory.userId))) return false;
+      if (territoryFilter === 'lobby' && selectedLobbyId && (!territory.userId || !lobbyMemberIds.has(territory.userId))) return false;
 
       if (!territory.userId) return true;
       const containsAnother = territories.some((other, otherIndex) => {
@@ -487,7 +491,67 @@ const MapView = ({
     };
 
     loadFriends();
+
+    // Cargar lobbies del usuario
+    const loadLobbies = async () => {
+      if (!user) {
+        setLobbies([]);
+        return;
+      }
+
+      try {
+        const { data: memberData } = await supabase
+          .from('lobby_members')
+          .select('lobby_id')
+          .eq('user_id', user.id);
+
+        const lobbyIds = memberData?.map(m => m.lobby_id) || [];
+
+        if (lobbyIds.length === 0) {
+          const { data: myLobbies } = await supabase
+            .from('lobbies')
+            .select('id, name')
+            .eq('creator_id', user.id);
+          setLobbies(myLobbies || []);
+        } else {
+          const { data: lobbiesData } = await supabase
+            .from('lobbies')
+            .select('id, name')
+            .or(`creator_id.eq.${user.id},id.in.(${lobbyIds.join(',')})`);
+          setLobbies(lobbiesData || []);
+        }
+      } catch (error) {
+        console.error('Error cargando lobbies:', error);
+      }
+    };
+
+    loadLobbies();
   }, [user]);
+
+  // Cargar miembros del lobby seleccionado
+  useEffect(() => {
+    const loadLobbyMembers = async () => {
+      if (!selectedLobbyId) {
+        setLobbyMemberIds(new Set());
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('lobby_members')
+          .select('user_id')
+          .eq('lobby_id', selectedLobbyId);
+
+        if (!error && data) {
+          setLobbyMemberIds(new Set(data.map(m => m.user_id)));
+        }
+      } catch (error) {
+        console.error('Error cargando miembros del lobby:', error);
+      }
+    };
+
+    loadLobbyMembers();
+  }, [selectedLobbyId]);
 
   const loadExplorerRoutes = useCallback(async () => {
     if (!user) {
@@ -1690,6 +1754,9 @@ const MapView = ({
             onToggleParks={setShowParks}
             onToggleFountains={setShowFountains}
             onToggleDistricts={setShowDistricts}
+            lobbies={lobbies}
+            selectedLobbyId={selectedLobbyId}
+            onSelectLobby={setSelectedLobbyId}
           />
         </div>
       )}
