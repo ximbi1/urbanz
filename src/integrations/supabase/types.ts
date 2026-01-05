@@ -486,6 +486,68 @@ export type Database = {
           },
         ]
       }
+      lobbies: {
+        Row: {
+          created_at: string
+          creator_id: string
+          id: string
+          invite_code: string
+          is_active: boolean
+          max_members: number | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          id?: string
+          invite_code?: string
+          is_active?: boolean
+          max_members?: number | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          id?: string
+          invite_code?: string
+          is_active?: boolean
+          max_members?: number | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lobby_members: {
+        Row: {
+          id: string
+          joined_at: string
+          lobby_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          lobby_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          lobby_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lobby_members_lobby_id_fkey"
+            columns: ["lobby_id"]
+            isOneToOne: false
+            referencedRelation: "lobbies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_challenge_claims: {
         Row: {
           challenge_id: string
@@ -1121,6 +1183,7 @@ export type Database = {
           last_attacker_id: string | null
           last_defender_id: string | null
           league_shard: string | null
+          lobby_id: string | null
           perimeter: number
           poi_summary: string | null
           points: number
@@ -1146,6 +1209,7 @@ export type Database = {
           last_attacker_id?: string | null
           last_defender_id?: string | null
           league_shard?: string | null
+          lobby_id?: string | null
           perimeter: number
           poi_summary?: string | null
           points: number
@@ -1171,6 +1235,7 @@ export type Database = {
           last_attacker_id?: string | null
           last_defender_id?: string | null
           league_shard?: string | null
+          lobby_id?: string | null
           perimeter?: number
           poi_summary?: string | null
           points?: number
@@ -1195,6 +1260,13 @@ export type Database = {
             columns: ["last_defender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "territories_lobby_id_fkey"
+            columns: ["lobby_id"]
+            isOneToOne: false
+            referencedRelation: "lobbies"
             referencedColumns: ["id"]
           },
           {
