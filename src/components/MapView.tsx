@@ -286,14 +286,28 @@ const MapView = ({
 
     mapboxgl.accessToken = mapboxToken;
 
+    // Vista inicial del globo terráqueo
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [2.1734, 41.3851], // Barcelona
-      zoom: 13,
+      center: [0, 20], // Centro del mundo
+      zoom: 1.5, // Zoom alejado para ver el planeta
+      pitch: 0,
+      projection: 'globe', // Proyección de globo 3D
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    // Configurar fog/atmósfera para efecto de globo
+    map.current.on('style.load', () => {
+      map.current?.setFog({
+        color: 'rgb(20, 20, 30)',
+        'high-color': 'rgb(30, 30, 50)',
+        'horizon-blend': 0.1,
+        'space-color': 'rgb(5, 5, 15)',
+        'star-intensity': 0.6,
+      });
+    });
 
     // Eventos de clic para simular carrera
     map.current.on('click', (e) => {
@@ -303,6 +317,46 @@ const MapView = ({
     });
 
     map.current.on('load', () => {
+      // Añadir capa de edificios 3D
+      const layers = map.current?.getStyle().layers;
+      const labelLayerId = layers?.find(
+        (layer) => layer.type === 'symbol' && layer.layout?.['text-field']
+      )?.id;
+
+      map.current?.addLayer(
+        {
+          id: '3d-buildings',
+          source: 'composite',
+          'source-layer': 'building',
+          filter: ['==', 'extrude', 'true'],
+          type: 'fill-extrusion',
+          minzoom: 14,
+          paint: {
+            'fill-extrusion-color': '#1a1a2e',
+            'fill-extrusion-height': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              14,
+              0,
+              14.5,
+              ['get', 'height'],
+            ],
+            'fill-extrusion-base': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              14,
+              0,
+              14.5,
+              ['get', 'min_height'],
+            ],
+            'fill-extrusion-opacity': 0.7,
+          },
+        },
+        labelLayerId
+      );
+
       setMapReady(true);
     });
 
@@ -1554,7 +1608,19 @@ const MapView = ({
     }
   }, [targetLocation, mapReady]);
 
-  const centerOnUser = () => {
+  const handleCenterOnUser = () => {
+    if (currentLocation) {
+      map.current?.flyTo({
+        center: [currentLocation.lng, currentLocation.lat],
+        zoom: 16,
+        pitch: 60,
+        bearing: 0,
+        duration: 2500,
+        essential: true,
+      });
+      return;
+    }
+    
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -1566,7 +1632,10 @@ const MapView = ({
           map.current?.flyTo({
             center: [location.lng, location.lat],
             zoom: 16,
-            duration: 1500,
+            pitch: 60,
+            bearing: 0,
+            duration: 2500,
+            essential: true,
           });
           toast.success('Centrado en tu ubicación');
         },
@@ -1627,7 +1696,7 @@ const MapView = ({
       
       {/* Botón de centrar ubicación */}
       <Button
-        onClick={centerOnUser}
+        onClick={handleCenterOnUser}
         className={`absolute bottom-24 right-4 z-10 rounded-full shadow-lg transition-opacity duration-200 ${overlayActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         size="icon"
       >
