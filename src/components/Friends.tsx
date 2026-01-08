@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, UserPlus, Check, XIcon, Users, Search, Swords, Loader2, Shield } from 'lucide-react';
+import { X, UserPlus, Check, XIcon, Users, Search, Swords, Loader2, Shield, Users2 } from 'lucide-react';
 import { ContentSkeleton } from './ui/content-skeleton';
 import { EmptyState } from './ui/empty-state';
 import { Card } from '@/components/ui/card';
@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import PullToRefreshIndicator from './PullToRefreshIndicator';
 import { Duel, DuelType } from '@/types/territory';
+import { Lobbies } from './Lobbies';
 
 interface FriendsProps {
   onClose: () => void;
@@ -36,7 +38,7 @@ interface Friendship {
 
 const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: FriendsProps) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
+  const [activeMainTab, setActiveMainTab] = useState<'friends' | 'lobbies'>('friends');
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Friendship[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -457,7 +459,7 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
     // Mobile full page version without overlay
     return (
       <div className="w-full h-full flex flex-col bg-background">
-        <div ref={containerRef} className="container mx-auto px-4 py-6 space-y-6 flex-1 overflow-y-auto pb-24 relative">
+        <div ref={containerRef} className="container mx-auto px-4 py-6 space-y-4 flex-1 overflow-y-auto pb-24 relative">
           <PullToRefreshIndicator
             isRefreshing={isRefreshing}
             pullDistance={pullDistance}
@@ -468,164 +470,183 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
               <Users className="w-6 h-6 text-primary" />
             </div>
-            <h2 className="text-2xl font-display font-bold glow-primary">Amigos</h2>
+            <h2 className="text-2xl font-display font-bold glow-primary">Social</h2>
           </div>
 
-          {/* Buscar usuarios */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-sm text-muted-foreground">Buscar usuarios</h3>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
-                  placeholder="Buscar por nombre de usuario..."
-                  className="pl-10"
-                />
-              </div>
-              <Button onClick={searchUsers} disabled={loading || !searchQuery.trim()}>
-                Buscar
-              </Button>
-            </div>
+          <Tabs value={activeMainTab} onValueChange={(v) => setActiveMainTab(v as 'friends' | 'lobbies')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="friends" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Amigos
+              </TabsTrigger>
+              <TabsTrigger value="lobbies" className="flex items-center gap-2">
+                <Users2 className="w-4 h-4" />
+                Lobbies
+              </TabsTrigger>
+            </TabsList>
 
-            {searchResults.length > 0 && (
-              <div className="space-y-2 max-h-48 overflow-auto">
-                {searchResults.map((profile) => (
-                  <div
-                    key={profile.id}
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={profile.avatar_url || undefined} />
-                        <AvatarFallback style={{ backgroundColor: profile.color }}>
-                          {profile.username.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-semibold">{profile.username}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {profile.total_points} pts • {profile.total_territories} territorios
-                        </p>
-                      </div>
-                    </div>
-                    <Button size="sm" onClick={() => sendFriendRequest(profile.id)}>
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Añadir
-                    </Button>
+            <TabsContent value="friends" className="space-y-6 mt-4">
+              {/* Buscar usuarios */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">Buscar usuarios</h3>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                      placeholder="Buscar por nombre de usuario..."
+                      className="pl-10"
+                    />
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Solicitudes pendientes */}
-          {pendingRequests.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm text-muted-foreground">
-                Solicitudes pendientes ({pendingRequests.length})
-              </h3>
-              <div className="space-y-2">
-                {pendingRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={request.friend_profile?.avatar_url || undefined} />
-                        <AvatarFallback
-                          style={{ backgroundColor: request.friend_profile?.color }}
-                        >
-                          {request.friend_profile?.username.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <p className="font-semibold">{request.friend_profile?.username}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => acceptRequest(request.id, request.user_id)}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => rejectRequest(request.id)}
-                      >
-                        <XIcon className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {renderDuelsSection()}
-
-          {/* Lista de amigos */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-sm text-muted-foreground">
-              Mis amigos ({friends.length})
-            </h3>
-            {friends.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Aún no tienes amigos</p>
-                <p className="text-sm">Busca usuarios y añádelos como amigos</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {friends.map((friendship) => (
-                  <div
-                    key={friendship.id}
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => onViewUserProfile?.(friendship.friend_id)}
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage
-                          src={friendship.friend_profile?.avatar_url || undefined}
-                        />
-                        <AvatarFallback
-                          style={{ backgroundColor: friendship.friend_profile?.color }}
-                        >
-                          {friendship.friend_profile?.username.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                <div>
-                  <p className="font-semibold">{friendship.friend_profile?.username}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {friendship.friend_profile?.total_points} pts •{' '}
-                    {friendship.friend_profile?.total_territories} territorios
-                  </p>
-                  {friendClans[friendship.friend_id] && (
-                    <p className="text-xs text-primary flex items-center gap-1">
-                      <Shield className="w-3 h-3" /> {friendClans[friendship.friend_id].name}
-                    </p>
-                  )}
+                  <Button onClick={searchUsers} disabled={loading || !searchQuery.trim()}>
+                    Buscar
+                  </Button>
                 </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFriend(friendship.id);
-                      }}
-                    >
-                      Eliminar
-                    </Button>
+
+                {searchResults.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-auto">
+                    {searchResults.map((profile) => (
+                      <div
+                        key={profile.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={profile.avatar_url || undefined} />
+                            <AvatarFallback style={{ backgroundColor: profile.color }}>
+                              {profile.username.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-semibold">{profile.username}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {profile.total_points} pts • {profile.total_territories} territorios
+                            </p>
+                          </div>
+                        </div>
+                        <Button size="sm" onClick={() => sendFriendRequest(profile.id)}>
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Añadir
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Solicitudes pendientes */}
+              {pendingRequests.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground">
+                    Solicitudes pendientes ({pendingRequests.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {pendingRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={request.friend_profile?.avatar_url || undefined} />
+                            <AvatarFallback
+                              style={{ backgroundColor: request.friend_profile?.color }}
+                            >
+                              {request.friend_profile?.username.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <p className="font-semibold">{request.friend_profile?.username}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => acceptRequest(request.id, request.user_id)}
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => rejectRequest(request.id)}
+                          >
+                            <XIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {renderDuelsSection()}
+
+              {/* Lista de amigos */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">
+                  Mis amigos ({friends.length})
+                </h3>
+                {friends.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Aún no tienes amigos</p>
+                    <p className="text-sm">Busca usuarios y añádelos como amigos</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {friends.map((friendship) => (
+                      <div
+                        key={friendship.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => onViewUserProfile?.(friendship.friend_id)}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage
+                              src={friendship.friend_profile?.avatar_url || undefined}
+                            />
+                            <AvatarFallback
+                              style={{ backgroundColor: friendship.friend_profile?.color }}
+                            >
+                              {friendship.friend_profile?.username.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-semibold">{friendship.friend_profile?.username}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {friendship.friend_profile?.total_points} pts •{' '}
+                              {friendship.friend_profile?.total_territories} territorios
+                            </p>
+                            {friendClans[friendship.friend_id] && (
+                              <p className="text-xs text-primary flex items-center gap-1">
+                                <Shield className="w-3 h-3" /> {friendClans[friendship.friend_id].name}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFriend(friendship.id);
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="lobbies" className="mt-4">
+              <Lobbies />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     );
@@ -634,175 +655,194 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
   // Desktop modal version
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4 animate-fade-in">
-      <Card className="w-full max-w-2xl bg-card border-glow p-4 md:p-6 space-y-4 md:space-y-6 max-h-[90vh] overflow-auto">
+      <Card className="w-full max-w-2xl bg-card border-glow p-4 md:p-6 space-y-4 max-h-[90vh] overflow-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
               <Users className="w-6 h-6 text-primary" />
             </div>
-            <h2 className="text-2xl font-display font-bold glow-primary">Amigos</h2>
+            <h2 className="text-2xl font-display font-bold glow-primary">Social</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className={isMobileFullPage ? 'hidden' : ''}>
             <X className="w-5 h-5" />
           </Button>
         </div>
 
-        {/* Buscar usuarios */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">Buscar usuarios</h3>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
-                placeholder="Buscar por nombre de usuario..."
-                className="pl-10"
-              />
-            </div>
-            <Button onClick={searchUsers} disabled={loading || !searchQuery.trim()}>
-              Buscar
-            </Button>
-          </div>
+        <Tabs value={activeMainTab} onValueChange={(v) => setActiveMainTab(v as 'friends' | 'lobbies')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="friends" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Amigos
+            </TabsTrigger>
+            <TabsTrigger value="lobbies" className="flex items-center gap-2">
+              <Users2 className="w-4 h-4" />
+              Lobbies
+            </TabsTrigger>
+          </TabsList>
 
-          {searchResults.length > 0 && (
-            <div className="space-y-2 max-h-48 overflow-auto">
-              {searchResults.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage src={profile.avatar_url || undefined} />
-                      <AvatarFallback style={{ backgroundColor: profile.color }}>
-                        {profile.username.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-semibold">{profile.username}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {profile.total_points} pts • {profile.total_territories} territorios
-                      </p>
-                    </div>
-                  </div>
-                  <Button size="sm" onClick={() => sendFriendRequest(profile.id)}>
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Añadir
-                  </Button>
+          <TabsContent value="friends" className="space-y-4 mt-4">
+            {/* Buscar usuarios */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-muted-foreground">Buscar usuarios</h3>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                    placeholder="Buscar por nombre de usuario..."
+                    className="pl-10"
+                  />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <Button onClick={searchUsers} disabled={loading || !searchQuery.trim()}>
+                  Buscar
+                </Button>
+              </div>
 
-        {/* Solicitudes pendientes */}
-        {pendingRequests.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="font-semibold text-sm text-muted-foreground">
-              Solicitudes pendientes ({pendingRequests.length})
-            </h3>
-            <div className="space-y-2">
-              {pendingRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage src={request.friend_profile?.avatar_url || undefined} />
-                      <AvatarFallback
-                        style={{ backgroundColor: request.friend_profile?.color }}
-                      >
-                        {request.friend_profile?.username.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <p className="font-semibold">{request.friend_profile?.username}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => acceptRequest(request.id, request.user_id)}
+              {searchResults.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-auto">
+                  {searchResults.map((profile) => (
+                    <div
+                      key={profile.id}
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border"
                     >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => rejectRequest(request.id)}
-                    >
-                      <XIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {renderDuelsSection()}
-
-        {/* Lista de amigos */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">
-            Mis amigos ({friends.length})
-          </h3>
-          {friends.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Aún no tienes amigos</p>
-              <p className="text-sm">Busca usuarios y añádelos como amigos</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {friends.map((friendship) => (
-                <div
-                  key={friendship.id}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => onViewUserProfile?.(friendship.friend_id)}
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage
-                        src={friendship.friend_profile?.avatar_url || undefined}
-                      />
-                      <AvatarFallback
-                        style={{ backgroundColor: friendship.friend_profile?.color }}
-                      >
-                        {friendship.friend_profile?.username.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-semibold">{friendship.friend_profile?.username}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {friendship.friend_profile?.total_points} pts •{' '}
-                        {friendship.friend_profile?.total_territories} territorios
-                      </p>
-                      {friendClans[friendship.friend_id] && (
-                        <p className="text-xs text-primary flex items-center gap-1">
-                          <Shield className="w-3 h-3" /> {friendClans[friendship.friend_id].name}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={profile.avatar_url || undefined} />
+                          <AvatarFallback style={{ backgroundColor: profile.color }}>
+                            {profile.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold">{profile.username}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {profile.total_points} pts • {profile.total_territories} territorios
+                          </p>
+                        </div>
+                      </div>
+                      <Button size="sm" onClick={() => sendFriendRequest(profile.id)}>
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Añadir
+                      </Button>
                     </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeFriend(friendship.id);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Solicitudes pendientes */}
+            {pendingRequests.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">
+                  Solicitudes pendientes ({pendingRequests.length})
+                </h3>
+                <div className="space-y-2">
+                  {pendingRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={request.friend_profile?.avatar_url || undefined} />
+                          <AvatarFallback
+                            style={{ backgroundColor: request.friend_profile?.color }}
+                          >
+                            {request.friend_profile?.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <p className="font-semibold">{request.friend_profile?.username}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => acceptRequest(request.id, request.user_id)}
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => rejectRequest(request.id)}
+                        >
+                          <XIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {renderDuelsSection()}
+
+            {/* Lista de amigos */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm text-muted-foreground">
+                Mis amigos ({friends.length})
+              </h3>
+              {friends.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>Aún no tienes amigos</p>
+                  <p className="text-sm">Busca usuarios y añádelos como amigos</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {friends.map((friendship) => (
+                    <div
+                      key={friendship.id}
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => onViewUserProfile?.(friendship.friend_id)}
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage
+                            src={friendship.friend_profile?.avatar_url || undefined}
+                          />
+                          <AvatarFallback
+                            style={{ backgroundColor: friendship.friend_profile?.color }}
+                          >
+                            {friendship.friend_profile?.username.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold">{friendship.friend_profile?.username}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {friendship.friend_profile?.total_points} pts •{' '}
+                            {friendship.friend_profile?.total_territories} territorios
+                          </p>
+                          {friendClans[friendship.friend_id] && (
+                            <p className="text-xs text-primary flex items-center gap-1">
+                              <Shield className="w-3 h-3" /> {friendClans[friendship.friend_id].name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFriend(friendship.id);
+                        }}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="lobbies" className="mt-4">
+            <Lobbies />
+          </TabsContent>
+        </Tabs>
       </Card>
     </div>
   );
