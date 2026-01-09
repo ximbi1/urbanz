@@ -1452,6 +1452,7 @@ export type Database = {
     Functions: {
       calculate_user_streak: { Args: { p_user_id: string }; Returns: number }
       is_member_of_clan: { Args: { check_clan: string }; Returns: boolean }
+      is_member_of_lobby: { Args: { check_lobby: string }; Returns: boolean }
       rebalance_league_shards: {
         Args: { shard_size?: number }
         Returns: undefined
