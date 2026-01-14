@@ -624,8 +624,9 @@ const MapView = ({
         });
         
         if (allParticipantIds.size > 0) {
+          // Usar vista pública para participantes
           const { data: profiles } = await supabase
-            .from('profiles')
+            .from('profiles_public')
             .select('id, username')
             .in('id', Array.from(allParticipantIds));
           
@@ -712,8 +713,9 @@ const MapView = ({
           if (playerSettings?.explorerMode) return;
           // Detectar robo de territorio
           if (payload.old.user_id === user?.id && payload.new.user_id !== user?.id) {
+            // Usar vista pública para obtener username del atacante
             const { data: thief } = await supabase
-              .from('profiles')
+              .from('profiles_public')
               .select('username')
               .eq('id', payload.new.user_id)
               .single();

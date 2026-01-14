@@ -186,10 +186,10 @@ const ActivityFeed = ({ onClose, isMobileFullPage = false }: ActivityFeedProps) 
         .order('created_at', { ascending: false })
         .limit(100);
 
-      // Obtener perfiles de los usuarios
+      // Obtener perfiles de los usuarios (vista pública)
       const userIds = runs?.map(r => r.user_id) || [];
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, avatar_url, color')
         .in('id', userIds);
 

@@ -47,14 +47,27 @@ const UserProfile = ({ userId, onClose }: UserProfileProps) => {
 
   const loadProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
-      setProfile(data);
+      // Si es propio perfil, usar tabla completa; si no, usar vista pública
+      if (isOwnProfile) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        setProfile(data);
+      } else {
+        // Vista pública para otros usuarios (sin datos sensibles como bio, height, gender)
+        const { data, error } = await supabase
+          .from('profiles_public')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        setProfile(data);
+      }
     } catch (error: any) {
       toast.error('Error al cargar perfil: ' + error.message);
     }
