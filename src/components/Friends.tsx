@@ -182,9 +182,10 @@ const Friends = ({ onClose, isMobileFullPage = false, onViewUserProfile }: Frien
 
     setLoading(true);
     try {
+      // Usar vista pública para buscar otros usuarios (sin datos sensibles)
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
+        .from('profiles_public')
+        .select('id, username, avatar_url, color, total_points, total_territories')
         .ilike('username', `%${searchQuery}%`)
         .neq('id', user.id)
         .limit(10);

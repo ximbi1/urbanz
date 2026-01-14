@@ -109,7 +109,7 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
     try {
       setLoading(true);
       
-      // Primero obtener la liga del usuario
+      // Primero obtener la liga del usuario (propio perfil)
       const { data: userProfile } = await supabase
         .from('profiles')
         .select('current_league')
@@ -118,9 +118,9 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
 
       const league = userProfile?.current_league || 'bronze';
 
-      // Obtener top 30 de la misma liga, ordenados por puntos
+      // Obtener top 30 de la misma liga, ordenados por puntos (vista pública)
       let { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
         .eq('current_league', league)
         .limit(30);
@@ -170,9 +170,9 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
         return;
       }
 
-      // Obtener perfiles de amigos + incluir al usuario actual
+      // Obtener perfiles de amigos + incluir al usuario actual (vista pública)
       let { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
         .in('id', [...friendIds, user.id]);
 
@@ -197,9 +197,9 @@ const Leagues = ({ onClose, isMobileFullPage = false }: LeaguesProps) => {
 
   const loadSocialLeagueRankings = async () => {
     try {
-      // Obtener top 30 de Liga Social ordenados por social_points
+      // Obtener top 30 de Liga Social ordenados por social_points (vista pública)
       const { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, season_points, social_points, total_points, current_league, color, avatar_url')
         .eq('social_league', true)
         .gt('social_points', 0)

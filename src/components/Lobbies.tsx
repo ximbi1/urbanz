@@ -117,8 +117,9 @@ export const Lobbies = ({ onSelectLobby, selectedLobbyId }: LobbiesProps) => {
 
     if (members && members.length > 0) {
       const userIds = members.map(m => m.user_id);
+      // Usar vista pública para miembros del lobby
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, avatar_url, color')
         .in('id', userIds);
 
@@ -147,8 +148,9 @@ export const Lobbies = ({ onSelectLobby, selectedLobbyId }: LobbiesProps) => {
         f.user_id === user.id ? f.friend_id : f.user_id
       );
 
+      // Usar vista pública para amigos
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, avatar_url, color')
         .in('id', friendIds);
 

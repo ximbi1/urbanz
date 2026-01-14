@@ -40,8 +40,9 @@ const Ranking = ({ onClose }: RankingProps) => {
   const loadRankings = async () => {
     try {
       setLoading(true);
+      // Usar vista pública que solo expone campos no sensibles
       const { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, total_points, total_territories, total_distance, color, avatar_url')
         .order('total_territories', { ascending: false });
 
@@ -79,9 +80,9 @@ const Ranking = ({ onClose }: RankingProps) => {
         return;
       }
 
-      // Obtener perfiles de amigos + incluir al usuario actual
+      // Obtener perfiles de amigos + incluir al usuario actual (vista pública)
       const { data, error } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('id, username, total_points, total_territories, total_distance, color, avatar_url')
         .in('id', [...friendIds, user.id])
         .order('total_territories', { ascending: false });
@@ -107,7 +108,7 @@ const Ranking = ({ onClose }: RankingProps) => {
           console.error('Error creating user profile for rankings:', insertError);
         } else {
           const { data: updatedData, error: updatedError } = await supabase
-            .from('profiles')
+            .from('profiles_public')
             .select('id, username, total_points, total_territories, total_distance, color, avatar_url')
             .in('id', [...friendIds, user.id])
             .order('total_territories', { ascending: false });
