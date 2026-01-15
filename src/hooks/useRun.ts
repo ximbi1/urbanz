@@ -276,7 +276,7 @@ export const useRun = () => {
     });
   }, [isRunning, isPaused, useGPS]);
 
-  const stopRun = useCallback(async () => {
+  const stopRun = useCallback(async (isPublic: boolean = false) => {
     await clearGPSWatch();
     allowSleep();
     triggerHaptic('stop');
@@ -396,6 +396,7 @@ export const useRun = () => {
             path: loopPath,
             duration: durationShare,
             source: useGPS ? 'live' : 'manual',
+            isPublic,
           },
         });
 

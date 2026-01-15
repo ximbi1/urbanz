@@ -1167,6 +1167,7 @@ export type Database = {
           distance: number
           duration: number
           id: string
+          is_public: boolean
           league_shard: string | null
           path: Json
           points_gained: number
@@ -1181,6 +1182,7 @@ export type Database = {
           distance: number
           duration: number
           id?: string
+          is_public?: boolean
           league_shard?: string | null
           path: Json
           points_gained?: number
@@ -1195,6 +1197,7 @@ export type Database = {
           distance?: number
           duration?: number
           id?: string
+          is_public?: boolean
           league_shard?: string | null
           path?: Json
           points_gained?: number
@@ -1703,7 +1706,9 @@ export type Database = {
           distance: number | null
           duration: number | null
           id: string | null
+          is_public: boolean | null
           league_shard: string | null
+          path: Json | null
           points_gained: number | null
           territories_conquered: number | null
           territories_lost: number | null
@@ -1716,7 +1721,9 @@ export type Database = {
           distance?: number | null
           duration?: number | null
           id?: string | null
+          is_public?: boolean | null
           league_shard?: string | null
+          path?: never
           points_gained?: number | null
           territories_conquered?: number | null
           territories_lost?: number | null
@@ -1729,7 +1736,9 @@ export type Database = {
           distance?: number | null
           duration?: number | null
           id?: string | null
+          is_public?: boolean | null
           league_shard?: string | null
+          path?: never
           points_gained?: number | null
           territories_conquered?: number | null
           territories_lost?: number | null

@@ -1,6 +1,9 @@
-import { Play, Pause, Square, Navigation, FlaskConical } from 'lucide-react';
+import { useState } from 'react';
+import { Play, Pause, Square, Navigation, FlaskConical, Globe, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +28,7 @@ interface RunControlsProps {
   onStart: (gpsMode: boolean) => void;
   onPause: () => void;
   onResume: () => void;
-  onStop: () => void;
+  onStop: (isPublic: boolean) => void;
   onSimulate?: (centerLat?: number, centerLng?: number) => void;
 }
 
@@ -43,7 +46,9 @@ const RunControls = ({
   onStop,
   onSimulate,
 }: RunControlsProps) => {
+  const [isPublic, setIsPublic] = useState(false);
   const showDevButton = isDevUser(userId) && onSimulate;
+  
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -56,6 +61,11 @@ const RunControls = ({
   const formatDistance = (meters: number) => {
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(2)} km`;
+  };
+
+  const handleStop = () => {
+    onStop(isPublic);
+    setIsPublic(false); // Reset for next run
   };
 
   return (
@@ -136,12 +146,38 @@ const RunControls = ({
                   <AlertDialogTitle>¿Terminar carrera?</AlertDialogTitle>
                   <AlertDialogDescription>
                     Se guardará tu carrera con {formatDistance(distance)} recorridos en {formatTime(duration)}.
-                    Esta acción no se puede deshacer.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                
+                {/* Toggle de privacidad */}
+                <div className="flex items-center justify-between py-4 px-1 border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    {isPublic ? (
+                      <Globe className="w-5 h-5 text-primary" />
+                    ) : (
+                      <Lock className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    <div>
+                      <Label htmlFor="public-run" className="text-sm font-medium">
+                        {isPublic ? 'Carrera pública' : 'Carrera privada'}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {isPublic 
+                          ? 'Otros podrán ver la animación de tu ruta' 
+                          : 'Solo tú verás el recorrido en el mapa'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="public-run"
+                    checked={isPublic}
+                    onCheckedChange={setIsPublic}
+                  />
+                </div>
+                
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={onStop}>
+                  <AlertDialogAction onClick={handleStop}>
                     Terminar carrera
                   </AlertDialogAction>
                 </AlertDialogFooter>

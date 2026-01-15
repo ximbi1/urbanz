@@ -9,4 +9,5 @@ export interface ClaimPayload {
   path: Coordinate[]
   duration: number
   source?: 'live' | 'import'
+  isPublic?: boolean
 }

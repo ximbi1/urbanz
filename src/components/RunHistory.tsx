@@ -101,7 +101,7 @@ export const RunHistory = ({ onClose, userId }: RunHistoryProps) => {
         
         setRuns(mappedRuns);
       } else {
-        // Para otros usuarios, usar vista pública sin datos GPS sensibles
+        // Para otros usuarios, usar vista pública (path disponible solo si is_public=true)
         const { data, error } = await supabase
           .from('runs_public')
           .select('*')
@@ -118,7 +118,7 @@ export const RunHistory = ({ onClose, userId }: RunHistoryProps) => {
           distance: run.distance,
           duration: run.duration,
           avgPace: run.avg_pace,
-          path: [], // No path disponible para otros usuarios
+          path: run.path ? (run.path as any) : [], // Path solo disponible si is_public=true
           territoriesConquered: run.territories_conquered,
           territoriesStolen: run.territories_stolen,
           territoriesLost: run.territories_lost,

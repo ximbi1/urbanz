@@ -1652,6 +1652,7 @@ Deno.serve(async (req) => {
         territories_lost: territoriesLost,
         points_gained: pointsGained,
         league_shard: profile.league_shard || 'bronze-1',
+        is_public: payload.isPublic ?? false,
       })
       .select('id')
       .single()

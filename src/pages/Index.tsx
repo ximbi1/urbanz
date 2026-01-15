@@ -197,8 +197,8 @@ const Index = () => {
     }
   }, [mapFilters]);
 
-  const handleStopRun = useCallback(async () => {
-    const result = await stopRun();
+  const handleStopRun = useCallback(async (isPublic: boolean = false) => {
+    const result = await stopRun(isPublic);
     if (result) {
       const avgPace = distance > 0 ? (duration / 60) / (distance / 1000) : 0;
       const avgSpeed = duration > 0 ? (distance / 1000) / (duration / 3600) : 0;
