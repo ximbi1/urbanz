@@ -965,6 +965,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "park_conquests_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "park_conquests_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -1128,6 +1135,13 @@ export type Database = {
             columns: ["run_id"]
             isOneToOne: false
             referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "run_reactions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs_public"
             referencedColumns: ["id"]
           },
           {
@@ -1682,8 +1696,69 @@ export type Database = {
         }
         Relationships: []
       }
+      runs_public: {
+        Row: {
+          avg_pace: number | null
+          created_at: string | null
+          distance: number | null
+          duration: number | null
+          id: string | null
+          league_shard: string | null
+          points_gained: number | null
+          territories_conquered: number | null
+          territories_lost: number | null
+          territories_stolen: number | null
+          user_id: string | null
+        }
+        Insert: {
+          avg_pace?: number | null
+          created_at?: string | null
+          distance?: number | null
+          duration?: number | null
+          id?: string | null
+          league_shard?: string | null
+          points_gained?: number | null
+          territories_conquered?: number | null
+          territories_lost?: number | null
+          territories_stolen?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          avg_pace?: number | null
+          created_at?: string | null
+          distance?: number | null
+          duration?: number | null
+          id?: string | null
+          league_shard?: string | null
+          points_gained?: number | null
+          territories_conquered?: number | null
+          territories_lost?: number | null
+          territories_stolen?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      are_friends: {
+        Args: { user_a: string; user_b: string }
+        Returns: boolean
+      }
       calculate_user_streak: { Args: { p_user_id: string }; Returns: number }
       is_member_of_clan: { Args: { check_clan: string }; Returns: boolean }
       is_member_of_lobby: { Args: { check_lobby: string }; Returns: boolean }

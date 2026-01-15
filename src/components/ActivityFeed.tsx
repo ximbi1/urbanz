@@ -167,15 +167,15 @@ const ActivityFeed = ({ onClose, isMobileFullPage = false }: ActivityFeedProps) 
       console.log('ActivityFeed allUserIds (debug)', allUserIdsArray);
 
       // Cargar carreras de los últimos 7 días solo de amigos/usuarios cercanos/propio usuario
+      // Usar vista runs_public para proteger datos GPS sensibles
       const { data: runs, error: runsError } = await supabase
-        .from('runs')
+        .from('runs_public')
         .select(`
           id,
           created_at,
           distance,
           duration,
           avg_pace,
-          path,
           territories_conquered,
           territories_stolen,
           points_gained,

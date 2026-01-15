@@ -75,30 +75,59 @@ const UserProfile = ({ userId, onClose }: UserProfileProps) => {
 
   const loadRuns = async () => {
     try {
-      const { data, error } = await supabase
-        .from('runs')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      if (error) throw error;
-      
-      const mappedRuns: Run[] = (data || []).map(run => ({
-        id: run.id,
-        userId: run.user_id,
-        distance: run.distance,
-        duration: run.duration,
-        avgPace: run.avg_pace,
-        path: run.path as any,
-        territoriesConquered: run.territories_conquered,
-        territoriesStolen: run.territories_stolen,
-        territoriesLost: run.territories_lost,
-        pointsGained: run.points_gained,
-        timestamp: new Date(run.created_at).getTime(),
-      }));
-      
-      setRuns(mappedRuns);
+      // Si es perfil propio, usar tabla completa (con path); si no, usar vista pública (sin path GPS)
+      if (isOwnProfile) {
+        const { data, error } = await supabase
+          .from('runs')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (error) throw error;
+        
+        const mappedRuns: Run[] = (data || []).map(run => ({
+          id: run.id,
+          userId: run.user_id,
+          distance: run.distance,
+          duration: run.duration,
+          avgPace: run.avg_pace,
+          path: run.path as any,
+          territoriesConquered: run.territories_conquered,
+          territoriesStolen: run.territories_stolen,
+          territoriesLost: run.territories_lost,
+          pointsGained: run.points_gained,
+          timestamp: new Date(run.created_at).getTime(),
+        }));
+        
+        setRuns(mappedRuns);
+      } else {
+        // Para otros usuarios, usar vista pública sin datos GPS sensibles
+        const { data, error } = await supabase
+          .from('runs_public')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (error) throw error;
+        
+        const mappedRuns: Run[] = (data || []).map(run => ({
+          id: run.id,
+          userId: run.user_id,
+          distance: run.distance,
+          duration: run.duration,
+          avgPace: run.avg_pace,
+          path: [], // No path disponible para otros usuarios
+          territoriesConquered: run.territories_conquered,
+          territoriesStolen: run.territories_stolen,
+          territoriesLost: run.territories_lost,
+          pointsGained: run.points_gained,
+          timestamp: new Date(run.created_at).getTime(),
+        }));
+        
+        setRuns(mappedRuns);
+      }
     } catch (error: any) {
       toast.error('Error al cargar carreras: ' + error.message);
     } finally {
