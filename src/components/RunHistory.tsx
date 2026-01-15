@@ -68,35 +68,67 @@ export const RunHistory = ({ onClose, userId }: RunHistoryProps) => {
       return;
     }
     
-    console.log('RunHistory: Loading runs for user', targetUserId);
+    const isOwnHistory = targetUserId === user?.id;
+    console.log('RunHistory: Loading runs for user', targetUserId, 'isOwn:', isOwnHistory);
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('runs')
-        .select('*')
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false });
-      
-      console.log('RunHistory: Loaded runs', { count: data?.length, error });
-      
-      if (error) throw error;
-      
-      const mappedRuns: RunWithSplits[] = (data || []).map(run => ({
-        id: run.id,
-        userId: run.user_id,
-        distance: run.distance,
-        duration: run.duration,
-        avgPace: run.avg_pace,
-        path: run.path as any,
-        territoriesConquered: run.territories_conquered,
-        territoriesStolen: run.territories_stolen,
-        territoriesLost: run.territories_lost,
-        pointsGained: run.points_gained,
-        timestamp: new Date(run.created_at).getTime(),
-        splits: [],
-      }));
-      
-      setRuns(mappedRuns);
+      // Si es historial propio, usar tabla completa; si no, usar vista pública (sin path GPS)
+      if (isOwnHistory) {
+        const { data, error } = await supabase
+          .from('runs')
+          .select('*')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false });
+        
+        console.log('RunHistory: Loaded runs', { count: data?.length, error });
+        
+        if (error) throw error;
+        
+        const mappedRuns: RunWithSplits[] = (data || []).map(run => ({
+          id: run.id,
+          userId: run.user_id,
+          distance: run.distance,
+          duration: run.duration,
+          avgPace: run.avg_pace,
+          path: run.path as any,
+          territoriesConquered: run.territories_conquered,
+          territoriesStolen: run.territories_stolen,
+          territoriesLost: run.territories_lost,
+          pointsGained: run.points_gained,
+          timestamp: new Date(run.created_at).getTime(),
+          splits: [],
+        }));
+        
+        setRuns(mappedRuns);
+      } else {
+        // Para otros usuarios, usar vista pública sin datos GPS sensibles
+        const { data, error } = await supabase
+          .from('runs_public')
+          .select('*')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: false });
+        
+        console.log('RunHistory: Loaded runs (public)', { count: data?.length, error });
+        
+        if (error) throw error;
+        
+        const mappedRuns: RunWithSplits[] = (data || []).map(run => ({
+          id: run.id,
+          userId: run.user_id,
+          distance: run.distance,
+          duration: run.duration,
+          avgPace: run.avg_pace,
+          path: [], // No path disponible para otros usuarios
+          territoriesConquered: run.territories_conquered,
+          territoriesStolen: run.territories_stolen,
+          territoriesLost: run.territories_lost,
+          pointsGained: run.points_gained,
+          timestamp: new Date(run.created_at).getTime(),
+          splits: [],
+        }));
+        
+        setRuns(mappedRuns);
+      }
     } catch (error: any) {
       console.error('RunHistory: Error loading runs', error);
       toast.error('Error al cargar carreras: ' + error.message);
