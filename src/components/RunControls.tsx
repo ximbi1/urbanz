@@ -46,7 +46,7 @@ const RunControls = ({
   onStop,
   onSimulate,
 }: RunControlsProps) => {
-  const [isPublic, setIsPublic] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
   const showDevButton = isDevUser(userId) && onSimulate;
   
   const formatTime = (seconds: number) => {
