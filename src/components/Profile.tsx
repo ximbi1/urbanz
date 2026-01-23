@@ -568,37 +568,6 @@ const Profile = ({ onClose, isMobileFullPage = false, onImportClick }: ProfilePr
                       }}
                     />
                   </div>
-                  <div className="pt-4 border-t border-border">
-                    <p className="text-sm font-semibold mb-2">Notificaciones push</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={async () => {
-                        try {
-                          toast.loading('Enviando notificación de prueba...');
-                          const { data, error } = await supabase.functions.invoke('send-test-push');
-                          if (error) throw error;
-                          if (data?.error) {
-                            toast.dismiss();
-                            toast.error(data.error);
-                          } else {
-                            toast.dismiss();
-                            toast.success(data?.message || 'Notificación enviada');
-                          }
-                        } catch (error: any) {
-                          toast.dismiss();
-                          toast.error('Error: ' + (error.message || 'No se pudo enviar'));
-                        }
-                      }}
-                    >
-                      <Bell className="w-4 h-4 mr-2" />
-                      Probar notificación
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Envía una notificación de prueba para verificar que funcionan correctamente.
-                    </p>
-                  </div>
                 </div>
               </SheetContent>
             </Sheet>

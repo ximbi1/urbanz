@@ -290,7 +290,7 @@ const MapView = ({
 
     mapboxgl.accessToken = mapboxToken;
 
-    // Vista inicial del globo terráqueo
+    // Vista inicial del globo terráqueo con optimizaciones de rendimiento
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/dark-v11',
@@ -298,18 +298,24 @@ const MapView = ({
       zoom: 1.5, // Zoom alejado para ver el planeta
       pitch: 0,
       projection: 'globe', // Proyección de globo 3D
+      // Optimizaciones de rendimiento
+      antialias: false, // Desactivar antialiasing para mejor FPS
+      fadeDuration: 0, // Sin animaciones de fade para carga más rápida
+      trackResize: true,
+      refreshExpiredTiles: false, // No recargar tiles expirados automáticamente
+      maxTileCacheSize: 50, // Limitar caché de tiles en memoria
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Configurar fog/atmósfera para efecto de globo
+    // Configurar fog/atmósfera para efecto de globo (simplificado)
     map.current.on('style.load', () => {
       map.current?.setFog({
         color: 'rgb(20, 20, 30)',
         'high-color': 'rgb(30, 30, 50)',
-        'horizon-blend': 0.1,
+        'horizon-blend': 0.05, // Reducido para mejor rendimiento
         'space-color': 'rgb(5, 5, 15)',
-        'star-intensity': 0.6,
+        'star-intensity': 0.4, // Reducido para mejor rendimiento
       });
     });
 
@@ -327,35 +333,36 @@ const MapView = ({
         (layer) => layer.type === 'symbol' && layer.layout?.['text-field']
       )?.id;
 
+      // Capa de edificios 3D optimizada - solo se activa a zoom 15+
       map.current?.addLayer(
         {
           id: '3d-buildings',
           source: 'composite',
           'source-layer': 'building',
-          filter: ['==', 'extrude', 'true'],
+          filter: ['all', 
+            ['==', 'extrude', 'true'],
+            ['>', ['get', 'height'], 3] // Solo edificios con altura > 3m
+          ],
           type: 'fill-extrusion',
-          minzoom: 14,
+          minzoom: 15, // Aumentado de 14 a 15 para mejor rendimiento
+          maxzoom: 18, // Limitar zoom máximo para edificios
           paint: {
             'fill-extrusion-color': '#1a1a2e',
             'fill-extrusion-height': [
               'interpolate',
               ['linear'],
               ['zoom'],
-              14,
-              0,
-              14.5,
-              ['get', 'height'],
+              15, 0,
+              15.5, ['get', 'height'],
             ],
             'fill-extrusion-base': [
               'interpolate',
               ['linear'],
               ['zoom'],
-              14,
-              0,
-              14.5,
-              ['get', 'min_height'],
+              15, 0,
+              15.5, ['get', 'min_height'],
             ],
-            'fill-extrusion-opacity': 0.7,
+            'fill-extrusion-opacity': 0.6, // Reducido ligeramente
           },
         },
         labelLayerId
