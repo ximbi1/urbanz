@@ -334,16 +334,13 @@ const MapView = ({
       )?.id;
 
       // Capa de edificios 3D optimizada - solo se activa a zoom 15+
-      // Capa de edificios 3D - minzoom 14 para visualización temprana
+      // Capa de edificios 3D
       map.current?.addLayer(
         {
           id: '3d-buildings',
           source: 'composite',
           'source-layer': 'building',
-          filter: ['all', 
-            ['==', 'extrude', 'true'],
-            ['>', ['get', 'height'], 5] // Solo edificios con altura > 5m para rendimiento
-          ],
+          filter: ['==', 'extrude', 'true'],
           type: 'fill-extrusion',
           minzoom: 14,
           paint: {
@@ -362,7 +359,7 @@ const MapView = ({
               14, 0,
               14.5, ['get', 'min_height'],
             ],
-            'fill-extrusion-opacity': 0.65,
+            'fill-extrusion-opacity': 0.7,
           },
         },
         labelLayerId
